@@ -20,17 +20,23 @@ def curva_historica():
     st.title("Curva Histórica")
     st.write("Contenido de Curva Histórica próximamente...")
 
+# Función para la página Workbench
+def workbench():
+    st.title("Workbench")
+    st.write("Contenido de Workbench próximamente...")
+
 # Diccionario de páginas
 PAGINAS = {
     "Monitoreo de Multilaterales": monitoreo_multilaterales,
     "Flujos Agregados": flujos_agregados,
     "GeoData": geodata,
-    "Curva Histórica": curva_historica
+    "Curva Histórica": curva_historica,
+    "Workbench": workbench  # Nueva página añadida
 }
 
 def main():
     st.sidebar.title("Navegación")
-    # Cambiamos de radio buttons a un menú desplegable (selectbox)
+    # Menú desplegable en la barra lateral
     seleccion = st.sidebar.selectbox("Ir a", list(PAGINAS.keys()))
     
     # Ejecutar la función de la página seleccionada
