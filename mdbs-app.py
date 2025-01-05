@@ -30,7 +30,8 @@ PAGINAS = {
 
 def main():
     st.sidebar.title("Navegación")
-    seleccion = st.sidebar.radio("Ir a", list(PAGINAS.keys()))
+    # Cambiamos de radio buttons a un menú desplegable (selectbox)
+    seleccion = st.sidebar.selectbox("Ir a", list(PAGINAS.keys()))
     
     # Ejecutar la función de la página seleccionada
     PAGINAS[seleccion]()
