@@ -74,6 +74,56 @@ def cooperaciones_tecnicas():
         )
     fig_line.update_traces(line_shape='spline')  # Línea suavizada
     st.plotly_chart(fig_line)
+    
+    # Cálculo del porcentaje de cooperaciones técnicas respecto al total
+    data_filtrado = data[
+        (data["Year"] >= rango_anios[0]) & 
+        (data["Year"] <= rango_anios[1])
+    ]
+    resumen_anual_total = data_filtrado.groupby("Year")["Approval Amount"].sum().reset_index()
+    resumen_anual_tc = data_tc.groupby("Year")["Approval Amount"].sum().reset_index()
+    porcentaje_tc = resumen_anual_tc.merge(
+        resumen_anual_total,
+        on="Year",
+        suffixes=("_tc", "_total")
+    )
+    porcentaje_tc["Porcentaje TC"] = (
+        porcentaje_tc["Approval Amount_tc"] / porcentaje_tc["Approval Amount_total"] * 100
+    )
+    
+    # Gráfico de Lollipop Chart Horizontal
+    fig_lollipop = go.Figure()
+
+    # Agregar las barras verticales (líneas delgadas)
+    for i, row in porcentaje_tc.iterrows():
+        fig_lollipop.add_trace(go.Scatter(
+            x=[0, row["Porcentaje TC"]],
+            y=[row["Year"], row["Year"]],
+            mode="lines",
+            line=dict(color="white", width=0.5),
+            showlegend=False
+        ))
+
+    # Agregar los puntos (círculos)
+    fig_lollipop.add_trace(go.Scatter(
+        x=porcentaje_tc["Porcentaje TC"],
+        y=porcentaje_tc["Year"],
+        mode="markers",
+        marker=dict(color="red", size=10),
+        name="Porcentaje TC"
+    ))
+
+    # Configuración del gráfico
+    fig_lollipop.update_layout(
+        title="Porcentaje de Cooperaciones Técnicas en el Total de Aprobaciones",
+        xaxis_title="Porcentaje (%)",
+        yaxis_title="Año",
+        xaxis=dict(showgrid=True),
+        yaxis=dict(showgrid=True),
+        height=600
+    )
+    
+    st.plotly_chart(fig_lollipop)
 
 # Diccionario de páginas
 PAGINAS = {
