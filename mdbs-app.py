@@ -25,13 +25,19 @@ def workbench():
     st.title("Workbench")
     st.write("Contenido de Workbench próximamente...")
 
+# Función para la página Cooperaciones Técnicas
+def cooperaciones_tecnicas():
+    st.title("Cooperaciones Técnicas")
+    st.write("Contenido de Cooperaciones Técnicas próximamente...")
+
 # Diccionario de páginas
 PAGINAS = {
     "Monitoreo de Multilaterales": monitoreo_multilaterales,
     "Flujos Agregados": flujos_agregados,
     "GeoData": geodata,
     "Curva Histórica": curva_historica,
-    "Workbench": workbench  # Nueva página añadida
+    "Workbench": workbench,
+    "Cooperaciones Técnicas": cooperaciones_tecnicas  # Nueva página añadida
 }
 
 def main():
