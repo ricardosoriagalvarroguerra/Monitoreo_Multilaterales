@@ -104,6 +104,7 @@ def cooperaciones_tecnicas():
         title="Porcentaje de Cooperaciones Técnicas en el Total de Aprobaciones",
         labels={"Year": "Año", "Porcentaje TC": "Porcentaje (%)"}
     )
+    fig_lollipop.update_traces(width=0.5)  # Hacer las barras más delgadas
     fig_lollipop.add_scatter(
         x=porcentaje_tc["Porcentaje TC"],
         y=porcentaje_tc["Year"],
