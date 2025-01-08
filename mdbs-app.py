@@ -41,11 +41,21 @@ def cooperaciones_tecnicas():
     
     # Opciones de filtro en la barra lateral
     st.sidebar.header("Filtros")
+    
+    # Filtro de país
     paises_disponibles = ["General", "Argentina", "Bolivia", "Brazil", "Paraguay", "Uruguay"]
     filtro_pais = st.sidebar.multiselect(
         "Selecciona uno o varios países (o General para todos):",
         options=paises_disponibles,
         default=["General"]
+    )
+    
+    # Filtro de rango de años
+    min_year = int(data["Year"].min())
+    max_year = int(data["Year"].max())
+    rango_anios = st.sidebar.slider(
+        "Selecciona el rango de años:",
+        min_year, max_year, (min_year, max_year)
     )
     
     # Filtrar los datos según el país seleccionado
@@ -54,6 +64,9 @@ def cooperaciones_tecnicas():
                        (data["Project Country"].isin(filtro_pais))]
     else:
         data_tc = data[data["Project Type"] == "Technical Cooperation"]
+    
+    # Filtrar los datos por el rango de años
+    data_tc = data_tc[(data_tc["Year"] >= rango_anios[0]) & (data_tc["Year"] <= rango_anios[1])]
     
     # Agrupar datos por año para Technical Cooperation
     resumen_anual_tc = data_tc.groupby("Year")["Approval Amount"].sum().reset_index()
@@ -71,7 +84,8 @@ def cooperaciones_tecnicas():
     st.plotly_chart(fig_line)
     
     # Cálculo del porcentaje de cooperaciones técnicas respecto al total
-    resumen_anual_total = data.groupby("Year")["Approval Amount"].sum().reset_index()
+    data_filtrado = data[(data["Year"] >= rango_anios[0]) & (data["Year"] <= rango_anios[1])]
+    resumen_anual_total = data_filtrado.groupby("Year")["Approval Amount"].sum().reset_index()
     porcentaje_tc = resumen_anual_tc.merge(
         resumen_anual_total,
         on="Year",
