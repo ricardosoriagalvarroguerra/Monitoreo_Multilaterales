@@ -68,24 +68,34 @@ def cooperaciones_tecnicas():
     # Filtrar los datos por el rango de años
     data_tc = data_tc[(data_tc["Year"] >= rango_anios[0]) & (data_tc["Year"] <= rango_anios[1])]
     
-    # Agrupar datos por año para Technical Cooperation
-    resumen_anual_tc = data_tc.groupby("Year")["Approval Amount"].sum().reset_index()
-    
-    # Gráfico de serie de tiempo suavizada con marcadores
-    fig_line = px.line(
-        resumen_anual_tc,
-        x="Year",
-        y="Approval Amount",
-        title="Serie de Tiempo de Monto Aprobado (Technical Cooperation)",
-        labels={"Year": "Año", "Approval Amount": "Monto Aprobado"},
-        markers=True
-    )
+    # Gráfico de serie de tiempo con series separadas por país
+    if "General" not in filtro_pais:
+        fig_line = px.line(
+            data_tc,
+            x="Year",
+            y="Approval Amount",
+            color="Project Country",  # Diferenciar series por país
+            title="Serie de Tiempo de Monto Aprobado (Technical Cooperation)",
+            labels={"Year": "Año", "Approval Amount": "Monto Aprobado", "Project Country": "País"},
+            markers=True
+        )
+    else:
+        resumen_anual_tc = data_tc.groupby("Year")["Approval Amount"].sum().reset_index()
+        fig_line = px.line(
+            resumen_anual_tc,
+            x="Year",
+            y="Approval Amount",
+            title="Serie de Tiempo de Monto Aprobado (Technical Cooperation)",
+            labels={"Year": "Año", "Approval Amount": "Monto Aprobado"},
+            markers=True
+        )
     fig_line.update_traces(line_shape='spline')  # Línea suavizada
     st.plotly_chart(fig_line)
     
     # Cálculo del porcentaje de cooperaciones técnicas respecto al total
     data_filtrado = data[(data["Year"] >= rango_anios[0]) & (data["Year"] <= rango_anios[1])]
     resumen_anual_total = data_filtrado.groupby("Year")["Approval Amount"].sum().reset_index()
+    resumen_anual_tc = data_tc.groupby("Year")["Approval Amount"].sum().reset_index()
     porcentaje_tc = resumen_anual_tc.merge(
         resumen_anual_total,
         on="Year",
@@ -104,11 +114,12 @@ def cooperaciones_tecnicas():
         title="Porcentaje de Cooperaciones Técnicas en el Total de Aprobaciones",
         labels={"Year": "Año", "Porcentaje TC": "Porcentaje (%)"}
     )
-    fig_lollipop.update_traces(width=0.01)  # Hacer las barras más delgadas
+    fig_lollipop.update_traces(width=0.5)  # Hacer las barras más delgadas
     fig_lollipop.add_scatter(
         x=porcentaje_tc["Porcentaje TC"],
         y=porcentaje_tc["Year"],
-        mode="markers",
+        mode="lines+markers",
+        line=dict(color="white", width=2),
         marker=dict(color="red", size=10),
         name="Porcentaje TC"
     )
