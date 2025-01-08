@@ -3,70 +3,21 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-# -----------------------------------------------------------------------------
-# CONFIGURACIÓN DE PÁGINA Y CSS PERSONALIZADO
-# -----------------------------------------------------------------------------
-st.set_page_config(
-    page_title="Cooperaciones Técnicas",
-    page_icon="✅",
-    layout="wide"
-)
-
-# CSS inline para toques de diseño (puedes ajustar colores y estilos)
-st.markdown(
-    """
-    <style>
-    /* Fondo de la app */
-    .main {
-        background-color: #F7F9FB;
-    }
-
-    /* Título principal */
-    .title {
-        font-size: 2.0rem;
-        font-weight: 700;
-        color: #333333;
-        margin-bottom: 0.5rem;
-    }
-
-    /* Subtítulo */
-    .subtitle {
-        font-size: 1.2rem;
-        color: #555555;
-        margin-bottom: 1rem;
-    }
-
-    /* Barras laterales */
-    [data-testid="stSidebar"] {
-        background-color: #FFFFFF;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# -----------------------------------------------------------------------------
-# FUNCIÓN PARA LA PÁGINA "COOPERACIONES TÉCNICAS"
-# -----------------------------------------------------------------------------
+# Función para la página Cooperaciones Técnicas
 def cooperaciones_tecnicas():
-    # Encabezados
-    st.markdown('<h1 class="title">Cooperaciones Técnicas</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Visualiza y analiza las cooperaciones técnicas aprobadas según país y año.</p>', unsafe_allow_html=True)
-
+    st.title("Cooperaciones Técnicas")
+    
     # Cargar datos desde el archivo Parquet
-    file_path = "IADB_DASH_BDD.parquet"  # Asegúrate de usar la ruta correcta
+    file_path = "IADB_DASH_BDD.parquet"  # Cambiar por la ruta correcta si es necesario
     data = pd.read_parquet(file_path)
     
-    # Conversión de la columna "Approval Date" a datetime
+    # Convertir la columna "Approval Date" a datetime
     data["Approval Date"] = pd.to_datetime(data["Approval Date"])
     data["Year"] = data["Approval Date"].dt.year
-
-    # -------------------------------------------------------------------------
-    # SIDEBAR: FILTROS
-    # -------------------------------------------------------------------------
+    
+    # Opciones de filtro en la barra lateral
     st.sidebar.header("Filtros")
-    st.sidebar.write("Utiliza estos filtros para refinar la información mostrada:")
-
+    
     # Filtro de país
     paises_disponibles = ["General", "Argentina", "Bolivia", "Brazil", "Paraguay", "Uruguay"]
     filtro_pais = st.sidebar.multiselect(
@@ -80,159 +31,110 @@ def cooperaciones_tecnicas():
     max_year = int(data["Year"].max())
     rango_anios = st.sidebar.slider(
         "Selecciona el rango de años:",
-        min_year,
-        max_year,
-        (min_year, max_year)
+        min_year, max_year, (min_year, max_year)
     )
     
-    # -------------------------------------------------------------------------
-    # PROCESAMIENTO DE DATOS
-    # -------------------------------------------------------------------------
+    # Filtrar los datos según el país seleccionado y rango de años
     if "General" not in filtro_pais:
         data_tc = data[
-            (data["Project Type"] == "Technical Cooperation")
-            & (data["Project Country"].isin(filtro_pais))
-            & (data["Year"] >= rango_anios[0])
-            & (data["Year"] <= rango_anios[1])
+            (data["Project Type"] == "Technical Cooperation") & 
+            (data["Project Country"].isin(filtro_pais)) &
+            (data["Year"] >= rango_anios[0]) & 
+            (data["Year"] <= rango_anios[1])
         ]
+        # Agrupar por país y año para evitar múltiples puntos en el mismo año
         data_tc = data_tc.groupby(["Project Country", "Year"])["Approval Amount"].sum().reset_index()
     else:
         data_tc = data[
-            (data["Project Type"] == "Technical Cooperation")
-            & (data["Year"] >= rango_anios[0])
-            & (data["Year"] <= rango_anios[1])
+            (data["Project Type"] == "Technical Cooperation") &
+            (data["Year"] >= rango_anios[0]) & 
+            (data["Year"] <= rango_anios[1])
         ]
         data_tc = data_tc.groupby("Year")["Approval Amount"].sum().reset_index()
     
-    # -------------------------------------------------------------------------
-    # SECCIÓN DE GRÁFICAS
-    # -------------------------------------------------------------------------
-    with st.container():
-        st.subheader("Serie de Tiempo de Monto Aprobado")
-
-        # Gráfico de serie de tiempo
-        if "General" not in filtro_pais:
-            fig_line = px.line(
-                data_tc,
-                x="Year",
-                y="Approval Amount",
-                color="Project Country",
-                title="Evolución del Monto Aprobado (Technical Cooperation)",
-                labels={
-                    "Year": "Año",
-                    "Approval Amount": "Monto Aprobado",
-                    "Project Country": "País"
-                },
-                markers=True
-            )
-        else:
-            fig_line = px.line(
-                data_tc,
-                x="Year",
-                y="Approval Amount",
-                title="Evolución del Monto Aprobado (Technical Cooperation)",
-                labels={"Year": "Año", "Approval Amount": "Monto Aprobado"},
-                markers=True
-            )
-        
-        fig_line.update_traces(line_shape='spline')  # Línea suavizada
-        fig_line.update_layout(
-            plot_bgcolor="#FFFFFF", 
-            paper_bgcolor="rgba(0,0,0,0)",
-            legend_title_text="",
-            margin=dict(l=20, r=20, t=60, b=20)
+    # Gráfico de serie de tiempo con series separadas por país
+    if "General" not in filtro_pais:
+        fig_line = px.line(
+            data_tc,
+            x="Year",
+            y="Approval Amount",
+            color="Project Country",  # Diferenciar series por país
+            title="Serie de Tiempo de Monto Aprobado (Technical Cooperation)",
+            labels={"Year": "Año", "Approval Amount": "Monto Aprobado", "Project Country": "País"},
+            markers=True
         )
-        st.plotly_chart(fig_line, use_container_width=True)
-
-    # -------------------------------------------------------------------------
-    # CÁLCULO Y GRÁFICA DEL PORCENTAJE DE TCs
-    # -------------------------------------------------------------------------
-    with st.container():
-        st.subheader("Porcentaje de Cooperaciones Técnicas en el Total")
-
-        data_filtrado = data[
-            (data["Year"] >= rango_anios[0]) 
-            & (data["Year"] <= rango_anios[1])
-        ]
-        resumen_anual_total = data_filtrado.groupby("Year")["Approval Amount"].sum().reset_index()
-        
-        # Unificamos la fuente de datos usada antes (data_tc) para resumir
-        if "General" not in filtro_pais:
-            resumen_anual_tc = data_tc.groupby(["Year"])["Approval Amount"].sum().reset_index()
-        else:
-            resumen_anual_tc = data_tc
-
-        # Merge para calcular el % respecto al total
-        porcentaje_tc = resumen_anual_tc.merge(
-            resumen_anual_total,
-            on="Year",
-            suffixes=("_tc", "_total")
+    else:
+        fig_line = px.line(
+            data_tc,
+            x="Year",
+            y="Approval Amount",
+            title="Serie de Tiempo de Monto Aprobado (Technical Cooperation)",
+            labels={"Year": "Año", "Approval Amount": "Monto Aprobado"},
+            markers=True
         )
-        porcentaje_tc["Porcentaje TC"] = (
-            porcentaje_tc["Approval Amount_tc"] / porcentaje_tc["Approval Amount_total"] * 100
-        )
-        
-        # Gráfico Lollipop Chart
-        fig_lollipop = go.Figure()
+    fig_line.update_traces(line_shape='spline')  # Línea suavizada
+    st.plotly_chart(fig_line)
+    
+    # Cálculo del porcentaje de cooperaciones técnicas respecto al total
+    data_filtrado = data[
+        (data["Year"] >= rango_anios[0]) & 
+        (data["Year"] <= rango_anios[1])
+    ]
+    resumen_anual_total = data_filtrado.groupby("Year")["Approval Amount"].sum().reset_index()
+    resumen_anual_tc = data_tc.groupby("Year")["Approval Amount"].sum().reset_index()
+    porcentaje_tc = resumen_anual_tc.merge(
+        resumen_anual_total,
+        on="Year",
+        suffixes=("_tc", "_total")
+    )
+    porcentaje_tc["Porcentaje TC"] = (
+        porcentaje_tc["Approval Amount_tc"] / porcentaje_tc["Approval Amount_total"] * 100
+    )
+    
+    # Gráfico de Lollipop Chart Horizontal
+    fig_lollipop = go.Figure()
 
-        # Líneas delgadas (barras verticales)
-        for _, row in porcentaje_tc.iterrows():
-            fig_lollipop.add_trace(
-                go.Scatter(
-                    x=[0, row["Porcentaje TC"]],
-                    y=[row["Year"], row["Year"]],
-                    mode="lines",
-                    line=dict(color="#888", width=2),
-                    showlegend=False
-                )
-            )
+    # Agregar las barras verticales (líneas delgadas)
+    for i, row in porcentaje_tc.iterrows():
+        fig_lollipop.add_trace(go.Scatter(
+            x=[0, row["Porcentaje TC"]],
+            y=[row["Year"], row["Year"]],
+            mode="lines",
+            line=dict(color="white", width=0.5),
+            showlegend=False
+        ))
 
-        # Puntos (círculos)
-        fig_lollipop.add_trace(
-            go.Scatter(
-                x=porcentaje_tc["Porcentaje TC"],
-                y=porcentaje_tc["Year"],
-                mode="markers+text",
-                marker=dict(color="crimson", size=10),
-                text=round(porcentaje_tc["Porcentaje TC"], 2),
-                textposition="middle right",
-                name="Porcentaje TC"
-            )
-        )
+    # Agregar los puntos (círculos)
+    fig_lollipop.add_trace(go.Scatter(
+        x=porcentaje_tc["Porcentaje TC"],
+        y=porcentaje_tc["Year"],
+        mode="markers",
+        marker=dict(color="red", size=10),
+        name="Porcentaje TC"
+    ))
 
-        # Configuración del gráfico
-        fig_lollipop.update_layout(
-            title="Porcentaje de Cooperaciones Técnicas en el Total de Aprobaciones",
-            xaxis_title="Porcentaje (%)",
-            yaxis_title="Año",
-            xaxis=dict(showgrid=True, zeroline=False),
-            yaxis=dict(showgrid=True, zeroline=False),
-            plot_bgcolor="#FFFFFF", 
-            paper_bgcolor="rgba(0,0,0,0)",
-            height=600,
-            margin=dict(l=20, r=20, t=60, b=20)
-        )
-        st.plotly_chart(fig_lollipop, use_container_width=True)
+    # Configuración del gráfico
+    fig_lollipop.update_layout(
+        title="Porcentaje de Cooperaciones Técnicas en el Total de Aprobaciones",
+        xaxis_title="Porcentaje (%)",
+        yaxis_title="Año",
+        xaxis=dict(showgrid=True),
+        yaxis=dict(showgrid=True),
+        height=600
+    )
+    
+    st.plotly_chart(fig_lollipop)
 
-
-# -----------------------------------------------------------------------------
-# DICCIONARIO DE PÁGINAS
-# -----------------------------------------------------------------------------
+# Diccionario de páginas
 PAGINAS = {
     "Cooperaciones Técnicas": cooperaciones_tecnicas,
 }
 
-# -----------------------------------------------------------------------------
-# FUNCIÓN PRINCIPAL (NAVEGACIÓN)
-# -----------------------------------------------------------------------------
+# Navegación principal
 def main():
-    # Barra lateral de navegación
     st.sidebar.title("Navegación")
-    seleccion = st.sidebar.selectbox("Ir a:", list(PAGINAS.keys()))
+    seleccion = st.sidebar.selectbox("Ir a", list(PAGINAS.keys()))
     PAGINAS[seleccion]()
 
-# -----------------------------------------------------------------------------
-# EJECUCIÓN
-# -----------------------------------------------------------------------------
 if __name__ == "__main__":
     main()
