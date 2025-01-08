@@ -57,10 +57,24 @@ st.markdown(
 )
 
 # -----------------------------------------------------------------------------
-# PÁGINA 1: COOPERACIONES TÉCNICAS
+# PÁGINA 1: MONITOREO MULTILATERALES
+# -----------------------------------------------------------------------------
+def monitoreo_multilaterales():
+    """Página principal: Monitoreo de las entidades multilaterales."""
+    st.markdown('<h1 class="title">Monitoreo Multilaterales</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Página principal para el seguimiento de proyectos e información multinacional.</p>', unsafe_allow_html=True)
+    
+    # ==========================
+    # Aquí implementa tu lógica
+    # ==========================
+    st.write("Contenido de la página 'Monitoreo Multilaterales'.")
+
+
+# -----------------------------------------------------------------------------
+# PÁGINA 2: COOPERACIONES TÉCNICAS
 # -----------------------------------------------------------------------------
 def cooperaciones_tecnicas():
-    # Encabezados
+    """Página de Cooperaciones Técnicas."""
     st.markdown('<h1 class="title">Cooperaciones Técnicas</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Visualiza y analiza las cooperaciones técnicas aprobadas según país y año.</p>', unsafe_allow_html=True)
 
@@ -75,7 +89,7 @@ def cooperaciones_tecnicas():
     # -------------------------------------------------------------------------
     # SIDEBAR: FILTROS
     # -------------------------------------------------------------------------
-    st.sidebar.header("Filtros")
+    st.sidebar.header("Filtros (Cooperaciones Técnicas)")
     st.sidebar.write("Utiliza estos filtros para refinar la información mostrada:")
 
     # Filtro de país
@@ -146,7 +160,6 @@ def cooperaciones_tecnicas():
                 markers=True
             )
         
-        # Ajustes para modo oscuro (sin fondo extra en el gráfico)
         fig_line.update_traces(line_shape='spline')
         fig_line.update_layout(
             legend_title_text="",
@@ -230,34 +243,41 @@ def cooperaciones_tecnicas():
 
 
 # -----------------------------------------------------------------------------
-# PÁGINA 2 (EJEMPLO): PROYECTOS DE INVERSIÓN
+# PÁGINA 3: FLUJOS AGREGADOS
 # -----------------------------------------------------------------------------
-def proyectos_inversion():
-    st.markdown('<h1 class="title">Proyectos de Inversión</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Visualiza y analiza los proyectos de inversión según tus criterios.</p>', unsafe_allow_html=True)
+def flujos_agregados():
+    """Página de Flujos Agregados."""
+    st.markdown('<h1 class="title">Flujos Agregados</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Analiza la información agregada de flujos relacionados con tus proyectos.</p>', unsafe_allow_html=True)
 
-    # Aquí podrías incluir tu lógica, lectura de datos y gráficas específicas
-    st.write("Aquí iría el contenido de la página 'Proyectos de Inversión'.")
+    # ==========================
+    # Aquí implementa tu lógica
+    # ==========================
+    st.write("Contenido de la página 'Flujos Agregados'.")
 
 
 # -----------------------------------------------------------------------------
-# PÁGINA 3 (EJEMPLO): OTROS PROYECTOS U OTRAS SECCIONES
+# PÁGINA 4: GEODATA
 # -----------------------------------------------------------------------------
-def otros_proyectos():
-    st.markdown('<h1 class="title">Otras Secciones o Proyectos</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Sección para visualizar y analizar otros datos o proyectos.</p>', unsafe_allow_html=True)
+def geodata():
+    """Página de GeoData."""
+    st.markdown('<h1 class="title">GeoData</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Explora datos geoespaciales de los proyectos.</p>', unsafe_allow_html=True)
 
-    # Aquí podrías incluir tu lógica, lectura de datos y gráficas específicas
-    st.write("Contenido de la página 'Otros Proyectos'.")
+    # ==========================
+    # Aquí implementa tu lógica
+    # ==========================
+    st.write("Contenido de la página 'GeoData'.")
 
 
 # -----------------------------------------------------------------------------
 # DICCIONARIO DE PÁGINAS
 # -----------------------------------------------------------------------------
 PAGINAS = {
+    "Monitoreo Multilaterales": monitoreo_multilaterales,
     "Cooperaciones Técnicas": cooperaciones_tecnicas,
-    "Proyectos de Inversión": proyectos_inversion,
-    "Otros Proyectos": otros_proyectos
+    "Flujos Agregados": flujos_agregados,
+    "GeoData": geodata
 }
 
 # -----------------------------------------------------------------------------
@@ -265,7 +285,9 @@ PAGINAS = {
 # -----------------------------------------------------------------------------
 def main():
     st.sidebar.title("Navegación")
-    seleccion = st.sidebar.selectbox("Ir a:", list(PAGINAS.keys()))
+    # Monitoreo Multilaterales como primera página (índice 0)
+    opciones = list(PAGINAS.keys())
+    seleccion = st.sidebar.selectbox("Ir a:", opciones, index=0)
     PAGINAS[seleccion]()
 
 # -----------------------------------------------------------------------------
