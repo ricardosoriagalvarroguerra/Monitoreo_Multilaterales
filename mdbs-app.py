@@ -136,8 +136,18 @@ def cooperaciones_tecnicas():
     with st.container():
         st.subheader("Serie de Tiempo de Monto Aprobado")
 
-        # Gráfico de serie de tiempo
+        # Definimos un mapeo de colores para los países
+        color_map = {
+            "Argentina": "#8ecae6",
+            "Bolivia": "#41af20",
+            "Brazil": "#ffb703",
+            "Paraguay": "#d00000",
+            "Uruguay": "#1c5d99",
+            # "General" no está en Project Country, pero lo usaremos aparte
+        }
+
         if "General" not in filtro_pais:
+            # Gráfico con color según Project Country
             fig_line = px.line(
                 data_tc,
                 x="Year",
@@ -149,9 +159,11 @@ def cooperaciones_tecnicas():
                     "Approval Amount": "Monto Aprobado",
                     "Project Country": "País"
                 },
-                markers=True
+                markers=True,
+                color_discrete_map=color_map  # Aplicamos los colores por país
             )
         else:
+            # "General" => solo hay una serie, le asignamos color #ee6c4d
             fig_line = px.line(
                 data_tc,
                 x="Year",
@@ -160,7 +172,9 @@ def cooperaciones_tecnicas():
                 labels={"Year": "Año", "Approval Amount": "Monto Aprobado"},
                 markers=True
             )
-        
+            # Forzamos el color de la única traza a #ee6c4d
+            fig_line.update_traces(line_color="#ee6c4d")
+
         fig_line.update_traces(line_shape='spline')
         fig_line.update_layout(
             legend_title_text="",
@@ -234,8 +248,9 @@ def cooperaciones_tecnicas():
             title="Porcentaje de Cooperaciones Técnicas en el Total de Aprobaciones",
             xaxis_title="Porcentaje (%)",
             yaxis_title="Año",
+            # Removemos gridlines solo en el eje Y
             xaxis=dict(showgrid=True, zeroline=False, gridcolor="#555555"),
-            yaxis=dict(showgrid=True, zeroline=False, gridcolor="#555555"),
+            yaxis=dict(showgrid=False, zeroline=False),  # aquí ya no dibujamos la grilla
             font_color="#FFFFFF",
             height=600,
             margin=dict(l=20, r=20, t=60, b=20)
