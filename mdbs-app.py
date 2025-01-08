@@ -31,20 +31,25 @@ def workbench():
 def cooperaciones_tecnicas():
     st.title("Cooperaciones Técnicas")
     
-    # Cargar datos desde el archivo
-    file_path = "IADB_DASH_BDD.xlsx"  # Cambiar por la ruta correcta si es necesario
-    data = pd.read_excel(file_path, sheet_name="Export")
+    # Cargar datos desde el archivo Parquet
+    file_path = "IADB_DASH_BDD.parquet"  # Cambiar por la ruta correcta si es necesario
+    data = pd.read_parquet(file_path)
     
     # Filtrar los datos relevantes
     data_tc = data[data["Project Type"] == "Technical Cooperation"]
     
-    # Agregar filtro de país
-    paises = ["General", "Argentina", "Bolivia", "Brazil", "Paraguay", "Uruguay"]
-    filtro_pais = st.selectbox("Selecciona el país (o General para ver todos):", paises)
+    # Opciones de filtro en la barra lateral
+    st.sidebar.header("Filtros")
+    paises_disponibles = ["Argentina", "Bolivia", "Brazil", "Paraguay", "Uruguay"]
+    filtro_pais = st.sidebar.multiselect(
+        "Selecciona uno o varios países:",
+        options=paises_disponibles,
+        default=paises_disponibles  # Por defecto muestra todos
+    )
     
-    # Aplicar el filtro de país
-    if filtro_pais != "General":
-        data_tc = data_tc[data_tc["Project Country"] == filtro_pais]
+    # Aplicar el filtro de países seleccionados
+    if filtro_pais:
+        data_tc = data_tc[data_tc["Project Country"].isin(filtro_pais)]
     
     # Convertir la columna "Approval Date" a datetime
     data_tc["Approval Date"] = pd.to_datetime(data_tc["Approval Date"])
@@ -58,7 +63,7 @@ def cooperaciones_tecnicas():
         resumen_anual,
         x="Year",
         y="Approval Amount",
-        title=f"Serie de Tiempo de Monto Aprobado ({filtro_pais})",
+        title="Serie de Tiempo de Monto Aprobado",
         labels={"Year": "Año", "Approval Amount": "Monto Aprobado"},
     )
     st.plotly_chart(fig_line)
@@ -68,7 +73,7 @@ def cooperaciones_tecnicas():
         resumen_anual,
         x="Year",
         y="Approval Amount",
-        title=f"Gráfico de Barras de Monto Aprobado ({filtro_pais})",
+        title="Gráfico de Barras de Monto Aprobado",
         labels={"Year": "Año", "Approval Amount": "Monto Aprobado"},
     )
     st.plotly_chart(fig_bar)
