@@ -115,7 +115,7 @@ def cooperaciones_tecnicas():
             x=[0, row["Porcentaje TC"]],
             y=[row["Year"], row["Year"]],
             mode="lines",
-            line=dict(color="white", width=0.1),
+            line=dict(color="white", width=0.4),
             showlegend=False
         ))
 
