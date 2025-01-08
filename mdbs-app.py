@@ -146,11 +146,9 @@ def cooperaciones_tecnicas():
                 markers=True
             )
         
-        # Ajustes para modo oscuro
+        # Ajustes para modo oscuro (sin fondo extra en el gráfico)
         fig_line.update_traces(line_shape='spline')
         fig_line.update_layout(
-            plot_bgcolor="#2E2E2E",  # Fondo interno de la gráfica
-            paper_bgcolor="rgba(0,0,0,0)",  # Fondo "transparente" que se asienta sobre #1E1E1E
             legend_title_text="",
             font_color="#FFFFFF",  # Texto claro
             margin=dict(l=20, r=20, t=60, b=20),
@@ -188,7 +186,7 @@ def cooperaciones_tecnicas():
             porcentaje_tc["Approval Amount_tc"] / porcentaje_tc["Approval Amount_total"] * 100
         )
         
-        # Gráfico Lollipop Chart
+        # Gráfico Lollipop Chart (sin fondo extra)
         fig_lollipop = go.Figure()
 
         # Líneas delgadas (barras verticales)
@@ -224,8 +222,6 @@ def cooperaciones_tecnicas():
             yaxis_title="Año",
             xaxis=dict(showgrid=True, zeroline=False, gridcolor="#555555"),
             yaxis=dict(showgrid=True, zeroline=False, gridcolor="#555555"),
-            plot_bgcolor="#2E2E2E",
-            paper_bgcolor="rgba(0,0,0,0)",
             font_color="#FFFFFF",
             height=600,
             margin=dict(l=20, r=20, t=60, b=20)
@@ -240,7 +236,7 @@ def proyectos_inversion():
     st.markdown('<h1 class="title">Proyectos de Inversión</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Visualiza y analiza los proyectos de inversión según tus criterios.</p>', unsafe_allow_html=True)
 
-    # Aquí podrías incluir tu lógica, lectura de datos y gráficas específicas:
+    # Aquí podrías incluir tu lógica, lectura de datos y gráficas específicas
     st.write("Aquí iría el contenido de la página 'Proyectos de Inversión'.")
 
 
@@ -251,7 +247,7 @@ def otros_proyectos():
     st.markdown('<h1 class="title">Otras Secciones o Proyectos</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Sección para visualizar y analizar otros datos o proyectos.</p>', unsafe_allow_html=True)
 
-    # Aquí podrías incluir tu lógica, lectura de datos y gráficas específicas:
+    # Aquí podrías incluir tu lógica, lectura de datos y gráficas específicas
     st.write("Contenido de la página 'Otros Proyectos'.")
 
 
