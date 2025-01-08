@@ -2,6 +2,31 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
+# Función para la página Monitoreo de Multilaterales
+def monitoreo_multilaterales():
+    st.title("Monitoreo de Multilaterales")
+    st.write("Contenido de Monitoreo de Multilaterales próximamente...")
+
+# Función para la página Flujos Agregados
+def flujos_agregados():
+    st.title("Flujos Agregados")
+    st.write("Contenido de Flujos Agregados próximamente...")
+
+# Función para la página GeoData
+def geodata():
+    st.title("GeoData")
+    st.write("Contenido de GeoData próximamente...")
+
+# Función para la página Curva Histórica
+def curva_historica():
+    st.title("Curva Histórica")
+    st.write("Contenido de Curva Histórica próximamente...")
+
+# Función para la página Workbench
+def workbench():
+    st.title("Workbench")
+    st.write("Contenido de Workbench próximamente...")
+
 # Función para la página Cooperaciones Técnicas
 def cooperaciones_tecnicas():
     st.title("Cooperaciones Técnicas")
@@ -55,15 +80,13 @@ PAGINAS = {
     "GeoData": geodata,
     "Curva Histórica": curva_historica,
     "Workbench": workbench,
-    "Cooperaciones Técnicas": cooperaciones_tecnicas  # Nueva página añadida
+    "Cooperaciones Técnicas": cooperaciones_tecnicas,
 }
 
+# Navegación principal
 def main():
     st.sidebar.title("Navegación")
-    # Menú desplegable en la barra lateral
     seleccion = st.sidebar.selectbox("Ir a", list(PAGINAS.keys()))
-    
-    # Ejecutar la función de la página seleccionada
     PAGINAS[seleccion]()
 
 if __name__ == "__main__":
