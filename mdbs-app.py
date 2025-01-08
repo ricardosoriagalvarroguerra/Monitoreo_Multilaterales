@@ -100,19 +100,19 @@ def cooperaciones_tecnicas():
         default=["General"]
     )
     
-    # Filtro de rango de años (2010 a 2024)
+    # Filtro de rango de años (2000 a 2024)
     rango_anios = st.sidebar.slider(
         "Selecciona el rango de años:",
-        2010,  # Valor mínimo fijo
+        2000,  # Valor mínimo fijo
         2024,  # Valor máximo fijo
-        (2010, 2024)  # Rango inicial por defecto
+        (2000, 2024)  # Rango inicial por defecto
     )
     
     # -------------------------------------------------------------------------
     # PROCESAMIENTO DE DATOS
     # -------------------------------------------------------------------------
     # Primero filtramos el dataset a ese rango de años
-    data = data[(data["Year"] >= 2010) & (data["Year"] <= 2024)]
+    data = data[(data["Year"] >= 2000) & (data["Year"] <= 2024)]
 
     if "General" not in filtro_pais:
         data_tc = data[
