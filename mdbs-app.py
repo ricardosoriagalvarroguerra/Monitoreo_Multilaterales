@@ -65,7 +65,7 @@ def monitoreo_multilaterales():
     st.markdown('<p class="subtitle">Página principal para el seguimiento de proyectos e información multinacional.</p>', unsafe_allow_html=True)
     
     # ==========================
-    # Aquí implementa tu lógica
+    # Lógica de Monitoreo Multilaterales
     # ==========================
     st.write("Contenido de la página 'Monitoreo Multilaterales'.")
 
@@ -100,19 +100,20 @@ def cooperaciones_tecnicas():
         default=["General"]
     )
     
-    # Filtro de rango de años
-    min_year = int(data["Year"].min())
-    max_year = int(data["Year"].max())
+    # Filtro de rango de años (2010 a 2024)
     rango_anios = st.sidebar.slider(
         "Selecciona el rango de años:",
-        min_year,
-        max_year,
-        (min_year, max_year)
+        2010,  # Valor mínimo fijo
+        2024,  # Valor máximo fijo
+        (2010, 2024)  # Rango inicial por defecto
     )
     
     # -------------------------------------------------------------------------
     # PROCESAMIENTO DE DATOS
     # -------------------------------------------------------------------------
+    # Primero filtramos el dataset a ese rango de años
+    data = data[(data["Year"] >= 2010) & (data["Year"] <= 2024)]
+
     if "General" not in filtro_pais:
         data_tc = data[
             (data["Project Type"] == "Technical Cooperation")
@@ -251,7 +252,7 @@ def flujos_agregados():
     st.markdown('<p class="subtitle">Analiza la información agregada de flujos relacionados con tus proyectos.</p>', unsafe_allow_html=True)
 
     # ==========================
-    # Aquí implementa tu lógica
+    # Lógica de Flujos Agregados
     # ==========================
     st.write("Contenido de la página 'Flujos Agregados'.")
 
@@ -265,7 +266,7 @@ def geodata():
     st.markdown('<p class="subtitle">Explora datos geoespaciales de los proyectos.</p>', unsafe_allow_html=True)
 
     # ==========================
-    # Aquí implementa tu lógica
+    # Lógica de GeoData
     # ==========================
     st.write("Contenido de la página 'GeoData'.")
 
