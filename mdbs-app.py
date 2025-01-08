@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
 # Función para la página Monitoreo de Multilaterales
 def monitoreo_multilaterales():
@@ -106,23 +107,37 @@ def cooperaciones_tecnicas():
     )
     
     # Gráfico de Lollipop Chart Horizontal
-    fig_lollipop = px.bar(
-        porcentaje_tc,
-        x="Porcentaje TC",
-        y="Year",
-        orientation="h",
-        title="Porcentaje de Cooperaciones Técnicas en el Total de Aprobaciones",
-        labels={"Year": "Año", "Porcentaje TC": "Porcentaje (%)"}
-    )
-    fig_lollipop.update_traces(width=0.5)  # Hacer las barras más delgadas
-    fig_lollipop.add_scatter(
+    fig_lollipop = go.Figure()
+
+    # Agregar las barras verticales (líneas delgadas)
+    for i, row in porcentaje_tc.iterrows():
+        fig_lollipop.add_trace(go.Scatter(
+            x=[0, row["Porcentaje TC"]],
+            y=[row["Year"], row["Year"]],
+            mode="lines",
+            line=dict(color="white", width=0.03),
+            showlegend=False
+        ))
+
+    # Agregar los puntos (círculos)
+    fig_lollipop.add_trace(go.Scatter(
         x=porcentaje_tc["Porcentaje TC"],
         y=porcentaje_tc["Year"],
-        mode="lines+markers",
-        line=dict(color="white", width=2),
+        mode="markers",
         marker=dict(color="red", size=10),
         name="Porcentaje TC"
+    ))
+
+    # Configuración del gráfico
+    fig_lollipop.update_layout(
+        title="Porcentaje de Cooperaciones Técnicas en el Total de Aprobaciones",
+        xaxis_title="Porcentaje (%)",
+        yaxis_title="Año",
+        xaxis=dict(showgrid=True),
+        yaxis=dict(showgrid=True),
+        height=600
     )
+    
     st.plotly_chart(fig_lollipop)
 
 # Diccionario de páginas
