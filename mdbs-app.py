@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-# Importar la versión "streamlit" de PyGwalker
 from pygwalker.api.streamlit import StreamlitRenderer
 import pygwalker as pyg
 
@@ -60,13 +59,32 @@ st.markdown(
 )
 
 # -----------------------------------------------------------------------------
-# LECTURA Y ALMACENAMIENTO DE BDD EN UN DICCIONARIO
+# FUNCIÓN PARA CARGAR LOS DATOS CON CACHÉ
 # -----------------------------------------------------------------------------
-df_iadb = pd.read_parquet("IADB_DASH_BDD.parquet")
+@st.cache_data
+def cargar_dataframes():
+    """
+    Lee y devuelve los DataFrames que se necesiten en la aplicación.
+    Ajusta aquí las rutas, nombres de archivos, etc.
+    """
+    # Carga tu BDD principal
+    df_iadb = pd.read_parquet("IADB_DASH_BDD.parquet")
 
-DATASETS = {
-    "IADB_DASH_BDD": df_iadb
-}
+    # Si tuvieras otras BDD, podrías cargarlas aquí:
+    # df_otra = pd.read_csv("otra_ruta.csv")
+    # df_mas = pd.read_parquet("alguna_otra.parquet")
+    # ...
+
+    # Retorna un diccionario con todos los DF que quieras usar en la app
+    datasets = {
+        "IADB_DASH_BDD": df_iadb,
+        # "Otra_BDD": df_otra,
+        # "Mas_BDD": df_mas,
+    }
+    return datasets
+
+# Cargamos las BDD en memoria, una sola vez gracias al decorador @st.cache_data
+DATASETS = cargar_dataframes()
 
 # -----------------------------------------------------------------------------
 # PÁGINA 1: MONITOREO MULTILATERALES
@@ -76,7 +94,6 @@ def monitoreo_multilaterales():
     st.markdown('<h1 class="title">Monitoreo Multilaterales</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Página principal para el seguimiento de proyectos e información multinacional.</p>', unsafe_allow_html=True)
     
-    # Lógica de Monitoreo Multilaterales
     st.write("Contenido de la página 'Monitoreo Multilaterales'.")
 
 
@@ -88,13 +105,16 @@ def cooperaciones_tecnicas():
     st.markdown('<h1 class="title">Cooperaciones Técnicas</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Visualiza y analiza las cooperaciones técnicas aprobadas según país y año.</p>', unsafe_allow_html=True)
 
+    # Obtenemos el DataFrame de la caché
     data = DATASETS["IADB_DASH_BDD"].copy()
 
     # Conversión de la columna "Approval Date" a datetime
     data["Approval Date"] = pd.to_datetime(data["Approval Date"], errors="coerce")
     data["Year"] = data["Approval Date"].dt.year
 
+    # -------------------------------------------------------------------------
     # SIDEBAR: FILTROS
+    # -------------------------------------------------------------------------
     st.sidebar.header("Filtros (Cooperaciones Técnicas)")
     st.sidebar.write("Utiliza estos filtros para refinar la información mostrada:")
 
@@ -112,7 +132,9 @@ def cooperaciones_tecnicas():
         (2000, 2024)
     )
     
+    # -------------------------------------------------------------------------
     # PROCESAMIENTO DE DATOS
+    # -------------------------------------------------------------------------
     data = data[(data["Year"] >= 2000) & (data["Year"] <= 2024)]
 
     if "General" not in filtro_pais:
@@ -131,7 +153,9 @@ def cooperaciones_tecnicas():
         ]
         data_tc = data_tc.groupby("Year")["Approval Amount"].sum().reset_index()
     
+    # -------------------------------------------------------------------------
     # SECCIÓN DE GRÁFICAS
+    # -------------------------------------------------------------------------
     with st.container():
         st.subheader("Serie de Tiempo de Monto Aprobado")
 
@@ -180,6 +204,9 @@ def cooperaciones_tecnicas():
         )
         st.plotly_chart(fig_line, use_container_width=True)
 
+    # -------------------------------------------------------------------------
+    # CÁLCULO Y GRÁFICA DEL PORCENTAJE DE TCs
+    # -------------------------------------------------------------------------
     with st.container():
         st.subheader("Porcentaje de Cooperaciones Técnicas en el Total")
 
@@ -269,10 +296,10 @@ def geodata():
 # -----------------------------------------------------------------------------
 def analisis_exploratorio():
     """
-    Página de Análisis Exploratorio utilizando StreamlitRenderer de PyGwalker.
-    Incluimos dos modos:
-      1. "Exploración Simple": arranca sin un spec.
-      2. "Cargar Spec": el usuario puede pegar un JSON de configuración previa.
+    Página de Análisis Exploratorio con StreamlitRenderer de PyGwalker.
+    Dos modos:
+      - "Exploración Simple": sin spec.
+      - "Cargar Spec": el usuario pega un JSON de configuración previa.
     """
     st.markdown('<h1 class="title">Análisis Exploratorio</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora interactivamente los datos con Pygwalker.</p>', unsafe_allow_html=True)
@@ -289,17 +316,14 @@ def analisis_exploratorio():
         ["Exploración Simple", "Cargar Spec"]
     )
 
-    # Obtenemos el DataFrame elegido
     df = DATASETS[selected_dataset_name]
-
-    # Aquí eliminamos la parte que mostraba df.head(5)
 
     st.write("---")
     st.write("**Interfaz de Análisis (Pygwalker):**")
 
     if modo_exploracion == "Exploración Simple":
         # Exploración sin spec (arranca en blanco)
-        pyg_app = StreamlitRenderer(df)  # sin 'spec=' => ""
+        pyg_app = StreamlitRenderer(df)
         pyg_app.explorer()
     else:
         # Cargar spec (un JSON) que el usuario pega en un text_area
