@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import pygwalker as pyg
+import streamlit.components.v1 as components
 
 # -----------------------------------------------------------------------------
 # CONFIGURACIÓN DE PÁGINA Y CSS PERSONALIZADO (MODO OSCURO)
@@ -57,6 +59,20 @@ st.markdown(
 )
 
 # -----------------------------------------------------------------------------
+# LECTURA Y ALMACENAMIENTO DE BDD EN UN DICCIONARIO
+# (puedes agregar más DataFrames si los necesitas)
+# -----------------------------------------------------------------------------
+df_iadb = pd.read_parquet("IADB_DASH_BDD.parquet")
+
+# Diccionario con todas las BDD que queremos usar en la app
+DATASETS = {
+    "IADB_DASH_BDD": df_iadb
+    # En el futuro, podrías añadir más así:
+    # "Otra BDD": pd.read_parquet("otra_ruta.parquet"),
+    # "BDD CSV": pd.read_csv("ruta.csv"),
+}
+
+# -----------------------------------------------------------------------------
 # PÁGINA 1: MONITOREO MULTILATERALES
 # -----------------------------------------------------------------------------
 def monitoreo_multilaterales():
@@ -78,9 +94,8 @@ def cooperaciones_tecnicas():
     st.markdown('<h1 class="title">Cooperaciones Técnicas</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Visualiza y analiza las cooperaciones técnicas aprobadas según país y año.</p>', unsafe_allow_html=True)
 
-    # Cargar datos desde el archivo Parquet
-    file_path = "IADB_DASH_BDD.parquet"  # Ajusta la ruta si corresponde
-    data = pd.read_parquet(file_path)
+    # Usamos el DataFrame que ya cargamos en DATASETS
+    data = DATASETS["IADB_DASH_BDD"].copy()
 
     # Conversión de la columna "Approval Date" a datetime
     data["Approval Date"] = pd.to_datetime(data["Approval Date"])
@@ -143,7 +158,6 @@ def cooperaciones_tecnicas():
             "Brazil": "#ffb703",
             "Paraguay": "#d00000",
             "Uruguay": "#1c5d99",
-            # "General" no está en Project Country, pero lo usaremos aparte
         }
 
         if "General" not in filtro_pais:
@@ -214,10 +228,9 @@ def cooperaciones_tecnicas():
             porcentaje_tc["Approval Amount_tc"] / porcentaje_tc["Approval Amount_total"] * 100
         )
         
-        # Gráfico Lollipop Chart (sin fondo extra)
+        # Gráfico Lollipop Chart
         fig_lollipop = go.Figure()
 
-        # Líneas delgadas (barras verticales)
         for _, row in porcentaje_tc.iterrows():
             fig_lollipop.add_trace(
                 go.Scatter(
@@ -229,7 +242,6 @@ def cooperaciones_tecnicas():
                 )
             )
 
-        # Puntos (círculos)
         fig_lollipop.add_trace(
             go.Scatter(
                 x=porcentaje_tc["Porcentaje TC"],
@@ -243,14 +255,12 @@ def cooperaciones_tecnicas():
             )
         )
 
-        # Configuración del gráfico
         fig_lollipop.update_layout(
             title="Porcentaje de Cooperaciones Técnicas en el Total de Aprobaciones",
             xaxis_title="Porcentaje (%)",
             yaxis_title="Año",
-            # Removemos gridlines solo en el eje Y
             xaxis=dict(showgrid=True, zeroline=False, gridcolor="#555555"),
-            yaxis=dict(showgrid=False, zeroline=False),  # aquí ya no dibujamos la grilla
+            yaxis=dict(showgrid=False, zeroline=False),
             font_color="#FFFFFF",
             height=600,
             margin=dict(l=20, r=20, t=60, b=20)
@@ -287,13 +297,50 @@ def geodata():
 
 
 # -----------------------------------------------------------------------------
+# PÁGINA 5: ANÁLISIS EXPLORATORIO (PYGWALKER)
+# -----------------------------------------------------------------------------
+def analisis_exploratorio():
+    """Página de Análisis Exploratorio utilizando Pygwalker."""
+    st.markdown('<h1 class="title">Análisis Exploratorio</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Explora interactivamente los datos con Pygwalker.</p>', unsafe_allow_html=True)
+
+    # -------------------------------------------------------------------------
+    # SIDEBAR: SELECCIONAR LA BDD (ya cargadas en el diccionario DATASETS)
+    # -------------------------------------------------------------------------
+    st.sidebar.header("Seleccione la BDD a Analizar")
+    st.sidebar.write("Elige uno de los siguientes DataFrames para explorarlo:")
+
+    # Desplegamos un selectbox con las llaves del diccionario DATASETS
+    selected_dataset_name = st.sidebar.selectbox(
+        "Selecciona la BDD:",
+        list(DATASETS.keys())
+    )
+
+    # Obtenemos el DataFrame seleccionado
+    df = DATASETS[selected_dataset_name]
+
+    # -------------------------------------------------------------------------
+    # MOSTRAR LA INTERFAZ DE PYGWALKER
+    # -------------------------------------------------------------------------
+    st.write("**Vista previa del DataFrame:**")
+    st.dataframe(df.head(5))
+
+    st.write("---")
+    st.write("**Interfaz de Análisis (Pygwalker):**")
+    # Pygwalker en modo HTML embebido
+    gwalker_html = pyg.walk(df, return_html=True)
+    components.html(gwalker_html, height=800, scrolling=True)
+
+
+# -----------------------------------------------------------------------------
 # DICCIONARIO DE PÁGINAS
 # -----------------------------------------------------------------------------
 PAGINAS = {
     "Monitoreo Multilaterales": monitoreo_multilaterales,
     "Cooperaciones Técnicas": cooperaciones_tecnicas,
     "Flujos Agregados": flujos_agregados,
-    "GeoData": geodata
+    "GeoData": geodata,
+    "Análisis Exploratorio": analisis_exploratorio
 }
 
 # -----------------------------------------------------------------------------
@@ -301,7 +348,6 @@ PAGINAS = {
 # -----------------------------------------------------------------------------
 def main():
     st.sidebar.title("Navegación")
-    # Monitoreo Multilaterales como primera página (índice 0)
     opciones = list(PAGINAS.keys())
     seleccion = st.sidebar.selectbox("Ir a:", opciones, index=0)
     PAGINAS[seleccion]()
