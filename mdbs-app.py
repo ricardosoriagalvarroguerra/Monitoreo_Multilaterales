@@ -59,20 +59,19 @@ st.markdown(
 )
 
 # -----------------------------------------------------------------------------
-# 1. CARGA DE DATOS (CACHÉ) - LEE EL PARQUET UNA SOLA VEZ
+# 1. CARGA DE DATOS (CACHÉ)
 # -----------------------------------------------------------------------------
 @st.cache_data
 def load_dataframes():
     """Lee y devuelve los DataFrames usados en la aplicación."""
     df_iadb = pd.read_parquet("IADB_DASH_BDD.parquet")
     
-    # Si tuvieras más DataFrames, podrías cargarlos aquí y agregarlos a este dict
+    # Agrega más dataframes si los necesitas
     datasets = {
         "IADB_DASH_BDD": df_iadb
     }
     return datasets
 
-# Diccionario de DataFrames cargados
 DATASETS = load_dataframes()
 
 # -----------------------------------------------------------------------------
@@ -81,15 +80,15 @@ DATASETS = load_dataframes()
 @st.cache_resource
 def get_pyg_renderer():
     """
-    Instancia el StreamlitRenderer de PyGWalker con parámetros
-    de alto rendimiento y lectura/escritura del spec.
+    Instancia el StreamlitRenderer de PyGWalker con kernel_computation=True
+    para acelerar cálculos en grandes datasets.
     """
-    df = DATASETS["IADB_DASH_BDD"]  # Tomamos el DF principal, ajústalo si deseas
+    df = DATASETS["IADB_DASH_BDD"]
     renderer = StreamlitRenderer(
         df,
-        kernel_computation=True,   # Acelera cálculos para grandes datasets
-        spec_io_mode="rw",         # Permite leer y escribir la configuración
-        spec="./gw_config.json"    # Archivo JSON donde se guarda la config
+        kernel_computation=True  # Activamos la opción de alto rendimiento
+        # Si deseas usar spec_io_mode="rw" o un spec, podrías añadirlo:
+        # spec_io_mode="rw", spec="./gw_config.json"
     )
     return renderer
 
@@ -130,10 +129,9 @@ def cooperaciones_tecnicas():
         (2000, 2024)
     )
     
-    # Filtra el DF por año
+    # Filtra el DF
     data = data[(data["Year"] >= 2000) & (data["Year"] <= 2024)]
 
-    # Filtra por país (si no es "General")
     if "General" not in filtro_pais:
         data_tc = data[
             (data["Project Type"] == "Technical Cooperation")
@@ -160,6 +158,7 @@ def cooperaciones_tecnicas():
         "Uruguay": "#1c5d99",
     }
 
+    import plotly.express as px
     if "General" not in filtro_pais:
         fig_line = px.line(
             data_tc,
@@ -199,9 +198,7 @@ def cooperaciones_tecnicas():
 
     # Gráfico 2: Porcentaje de TCs
     st.subheader("Porcentaje de Cooperaciones Técnicas en el Total")
-    data_filtrado = data[
-        (data["Year"] >= rango_anios[0]) & (data["Year"] <= rango_anios[1])
-    ]
+    data_filtrado = data[(data["Year"] >= rango_anios[0]) & (data["Year"] <= rango_anios[1])]
     resumen_anual_total = data_filtrado.groupby("Year")["Approval Amount"].sum().reset_index()
 
     if "General" not in filtro_pais:
@@ -218,6 +215,7 @@ def cooperaciones_tecnicas():
         porcentaje_tc["Approval Amount_tc"] / porcentaje_tc["Approval Amount_total"] * 100
     )
     
+    import plotly.graph_objects as go
     fig_lollipop = go.Figure()
     for _, row in porcentaje_tc.iterrows():
         fig_lollipop.add_trace(
@@ -274,41 +272,21 @@ def geodata():
 
 
 # -----------------------------------------------------------------------------
-# PÁGINA 5: ANÁLISIS EXPLORATORIO (PYGWALKER - STREAMLITRENDERER)
+# PÁGINA 5: ANÁLISIS EXPLORATORIO (PYGWALKER)
 # -----------------------------------------------------------------------------
 def analisis_exploratorio():
     """
-    Página de Análisis Exploratorio con StreamlitRenderer de PyGwalker.
-    Demonstramos el uso de tabs para distintas vistas:
-      - Explorer: interfaz completa
-      - Data: inicia en la pestaña "data"
-      - Charts: gráficos registrados (chart(0), chart(1), etc.)
+    Página de Análisis Exploratorio con kernel_computation=True.
+    No se usan múltiples vistas, ni el argumento 'height'.
     """
     st.markdown('<h1 class="title">Análisis Exploratorio</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Explora datos con Pygwalker en distintas vistas.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Explora datos con PyGWalker (alto rendimiento).</p>', unsafe_allow_html=True)
 
-    # Obtenemos el renderer (cacheado), con kernel_computation y spec_io_mode
+    # Obtenemos el renderer (cacheado), con kernel_computation=True
     renderer = get_pyg_renderer()
 
-    tab1, tab2, tab3 = st.tabs(["Explorer", "Data", "Charts"])
-
-    with tab1:
-        st.write("**Interfaz completa**")
-        renderer.explorer(height=800)  # Vista "vis" por defecto
-
-    with tab2:
-        st.write("**Vista de Datos**")
-        renderer.explorer(default_tab="data", height=800)  # Muestra la pestaña "data"
-
-    with tab3:
-        st.write("**Algunos Charts Registrados**")
-        st.info("Asumiendo que hayas creado y guardado charts en la interfaz, podrían verse aquí.")
-        
-        st.subheader("Ejemplo: Chart(0)")
-        renderer.chart(0, height=400)
-        
-        st.subheader("Ejemplo: Chart(1)")
-        renderer.chart(1, height=400)
+    # Simplemente mostramos la interfaz de PygWalker completa
+    renderer.explorer()  # No pasamos 'height' ni otras vistas
 
 
 # -----------------------------------------------------------------------------
