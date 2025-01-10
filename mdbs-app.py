@@ -3,7 +3,6 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import pygwalker as pyg
-import streamlit.components.v1 as components
 
 # -----------------------------------------------------------------------------
 # CONFIGURACIÓN DE PÁGINA Y CSS PERSONALIZADO (MODO OSCURO)
@@ -60,16 +59,12 @@ st.markdown(
 
 # -----------------------------------------------------------------------------
 # LECTURA Y ALMACENAMIENTO DE BDD EN UN DICCIONARIO
-# (puedes agregar más DataFrames si los necesitas)
 # -----------------------------------------------------------------------------
 df_iadb = pd.read_parquet("IADB_DASH_BDD.parquet")
 
-# Diccionario con todas las BDD que queremos usar en la app
 DATASETS = {
     "IADB_DASH_BDD": df_iadb
-    # En el futuro, podrías añadir más así:
-    # "Otra BDD": pd.read_parquet("otra_ruta.parquet"),
-    # "BDD CSV": pd.read_csv("ruta.csv"),
+    # Si deseas, añade más DataFrames en este diccionario
 }
 
 # -----------------------------------------------------------------------------
@@ -174,7 +169,7 @@ def cooperaciones_tecnicas():
                     "Project Country": "País"
                 },
                 markers=True,
-                color_discrete_map=color_map  # Aplicamos los colores por país
+                color_discrete_map=color_map
             )
         else:
             # "General" => solo hay una serie, le asignamos color #ee6c4d
@@ -186,7 +181,6 @@ def cooperaciones_tecnicas():
                 labels={"Year": "Año", "Approval Amount": "Monto Aprobado"},
                 markers=True
             )
-            # Forzamos el color de la única traza a #ee6c4d
             fig_line.update_traces(line_color="#ee6c4d")
 
         fig_line.update_traces(line_shape='spline')
@@ -212,13 +206,11 @@ def cooperaciones_tecnicas():
         ]
         resumen_anual_total = data_filtrado.groupby("Year")["Approval Amount"].sum().reset_index()
         
-        # Unificamos la fuente de datos usada antes (data_tc) para resumir
         if "General" not in filtro_pais:
             resumen_anual_tc = data_tc.groupby(["Year"])["Approval Amount"].sum().reset_index()
         else:
             resumen_anual_tc = data_tc
 
-        # Merge para calcular el % respecto al total
         porcentaje_tc = resumen_anual_tc.merge(
             resumen_anual_total,
             on="Year",
@@ -228,7 +220,6 @@ def cooperaciones_tecnicas():
             porcentaje_tc["Approval Amount_tc"] / porcentaje_tc["Approval Amount_total"] * 100
         )
         
-        # Gráfico Lollipop Chart
         fig_lollipop = go.Figure()
 
         for _, row in porcentaje_tc.iterrows():
@@ -300,37 +291,29 @@ def geodata():
 # PÁGINA 5: ANÁLISIS EXPLORATORIO (PYGWALKER)
 # -----------------------------------------------------------------------------
 def analisis_exploratorio():
-    """Página de Análisis Exploratorio utilizando Pygwalker."""
+    """Página de Análisis Exploratorio usando Pygwalker integrado a Streamlit."""
     st.markdown('<h1 class="title">Análisis Exploratorio</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora interactivamente los datos con Pygwalker.</p>', unsafe_allow_html=True)
 
-    # -------------------------------------------------------------------------
-    # SIDEBAR: SELECCIONAR LA BDD (ya cargadas en el diccionario DATASETS)
-    # -------------------------------------------------------------------------
+    # Barra lateral: elegir la BDD
     st.sidebar.header("Seleccione la BDD a Analizar")
-    st.sidebar.write("Elige uno de los siguientes DataFrames para explorarlo:")
-
-    # Desplegamos un selectbox con las llaves del diccionario DATASETS
     selected_dataset_name = st.sidebar.selectbox(
         "Selecciona la BDD:",
         list(DATASETS.keys())
     )
 
-    # Obtenemos el DataFrame seleccionado
+    # Obtenemos el DataFrame
     df = DATASETS[selected_dataset_name]
 
-    # -------------------------------------------------------------------------
-    # MOSTRAR LA INTERFAZ DE PYGWALKER
-    # -------------------------------------------------------------------------
+    # Vista previa
     st.write("**Vista previa del DataFrame:**")
     st.dataframe(df.head(5))
 
     st.write("---")
     st.write("**Interfaz de Análisis (Pygwalker):**")
-    # Pygwalker en modo HTML embebido
-    gwalker_html = pyg.walk(df, return_html=True)
-    components.html(gwalker_html, height=800, scrolling=True)
 
+    # Pygwalker integrado con env="Streamlit"
+    pyg.walk(df, env="Streamlit")
 
 # -----------------------------------------------------------------------------
 # DICCIONARIO DE PÁGINAS
