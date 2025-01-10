@@ -59,41 +59,46 @@ st.markdown(
 )
 
 # -----------------------------------------------------------------------------
-# FUNCIÓN PARA CARGAR LOS DATOS CON CACHÉ
+# 1. CARGA DE DATOS (CACHÉ) - LEE EL PARQUET UNA SOLA VEZ
 # -----------------------------------------------------------------------------
 @st.cache_data
-def cargar_dataframes():
-    """
-    Lee y devuelve los DataFrames que se necesiten en la aplicación.
-    Ajusta aquí las rutas, nombres de archivos, etc.
-    """
-    # Carga tu BDD principal
+def load_dataframes():
+    """Lee y devuelve los DataFrames usados en la aplicación."""
     df_iadb = pd.read_parquet("IADB_DASH_BDD.parquet")
-
-    # Si tuvieras otras BDD, podrías cargarlas aquí:
-    # df_otra = pd.read_csv("otra_ruta.csv")
-    # df_mas = pd.read_parquet("alguna_otra.parquet")
-    # ...
-
-    # Retorna un diccionario con todos los DF que quieras usar en la app
+    
+    # Si tuvieras más DataFrames, podrías cargarlos aquí y agregarlos a este dict
     datasets = {
-        "IADB_DASH_BDD": df_iadb,
-        # "Otra_BDD": df_otra,
-        # "Mas_BDD": df_mas,
+        "IADB_DASH_BDD": df_iadb
     }
     return datasets
 
-# Cargamos las BDD en memoria, una sola vez gracias al decorador @st.cache_data
-DATASETS = cargar_dataframes()
+# Diccionario de DataFrames cargados
+DATASETS = load_dataframes()
+
+# -----------------------------------------------------------------------------
+# 2. CREACIÓN DEL RENDERER DE PYGWALKER (CACHÉ)
+# -----------------------------------------------------------------------------
+@st.cache_resource
+def get_pyg_renderer():
+    """
+    Instancia el StreamlitRenderer de PyGWalker con parámetros
+    de alto rendimiento y lectura/escritura del spec.
+    """
+    df = DATASETS["IADB_DASH_BDD"]  # Tomamos el DF principal, ajústalo si deseas
+    renderer = StreamlitRenderer(
+        df,
+        kernel_computation=True,   # Acelera cálculos para grandes datasets
+        spec_io_mode="rw",         # Permite leer y escribir la configuración
+        spec="./gw_config.json"    # Archivo JSON donde se guarda la config
+    )
+    return renderer
 
 # -----------------------------------------------------------------------------
 # PÁGINA 1: MONITOREO MULTILATERALES
 # -----------------------------------------------------------------------------
 def monitoreo_multilaterales():
-    """Página principal: Monitoreo de las entidades multilaterales."""
     st.markdown('<h1 class="title">Monitoreo Multilaterales</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Página principal para el seguimiento de proyectos e información multinacional.</p>', unsafe_allow_html=True)
-    
     st.write("Contenido de la página 'Monitoreo Multilaterales'.")
 
 
@@ -101,20 +106,13 @@ def monitoreo_multilaterales():
 # PÁGINA 2: COOPERACIONES TÉCNICAS
 # -----------------------------------------------------------------------------
 def cooperaciones_tecnicas():
-    """Página de Cooperaciones Técnicas."""
     st.markdown('<h1 class="title">Cooperaciones Técnicas</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Visualiza y analiza las cooperaciones técnicas aprobadas según país y año.</p>', unsafe_allow_html=True)
 
-    # Obtenemos el DataFrame de la caché
     data = DATASETS["IADB_DASH_BDD"].copy()
-
-    # Conversión de la columna "Approval Date" a datetime
     data["Approval Date"] = pd.to_datetime(data["Approval Date"], errors="coerce")
     data["Year"] = data["Approval Date"].dt.year
 
-    # -------------------------------------------------------------------------
-    # SIDEBAR: FILTROS
-    # -------------------------------------------------------------------------
     st.sidebar.header("Filtros (Cooperaciones Técnicas)")
     st.sidebar.write("Utiliza estos filtros para refinar la información mostrada:")
 
@@ -132,11 +130,10 @@ def cooperaciones_tecnicas():
         (2000, 2024)
     )
     
-    # -------------------------------------------------------------------------
-    # PROCESAMIENTO DE DATOS
-    # -------------------------------------------------------------------------
+    # Filtra el DF por año
     data = data[(data["Year"] >= 2000) & (data["Year"] <= 2024)]
 
+    # Filtra por país (si no es "General")
     if "General" not in filtro_pais:
         data_tc = data[
             (data["Project Type"] == "Technical Cooperation")
@@ -153,130 +150,117 @@ def cooperaciones_tecnicas():
         ]
         data_tc = data_tc.groupby("Year")["Approval Amount"].sum().reset_index()
     
-    # -------------------------------------------------------------------------
-    # SECCIÓN DE GRÁFICAS
-    # -------------------------------------------------------------------------
-    with st.container():
-        st.subheader("Serie de Tiempo de Monto Aprobado")
+    # Gráfico 1: Serie de Tiempo
+    st.subheader("Serie de Tiempo de Monto Aprobado")
+    color_map = {
+        "Argentina": "#8ecae6",
+        "Bolivia": "#41af20",
+        "Brazil": "#ffb703",
+        "Paraguay": "#d00000",
+        "Uruguay": "#1c5d99",
+    }
 
-        color_map = {
-            "Argentina": "#8ecae6",
-            "Bolivia": "#41af20",
-            "Brazil": "#ffb703",
-            "Paraguay": "#d00000",
-            "Uruguay": "#1c5d99",
-        }
-
-        if "General" not in filtro_pais:
-            fig_line = px.line(
-                data_tc,
-                x="Year",
-                y="Approval Amount",
-                color="Project Country",
-                title="Evolución del Monto Aprobado (Technical Cooperation)",
-                labels={
-                    "Year": "Año",
-                    "Approval Amount": "Monto Aprobado",
-                    "Project Country": "País"
-                },
-                markers=True,
-                color_discrete_map=color_map
-            )
-        else:
-            fig_line = px.line(
-                data_tc,
-                x="Year",
-                y="Approval Amount",
-                title="Evolución del Monto Aprobado (Technical Cooperation)",
-                labels={"Year": "Año", "Approval Amount": "Monto Aprobado"},
-                markers=True
-            )
-            fig_line.update_traces(line_color="#ee6c4d")
-
-        fig_line.update_traces(line_shape='spline')
-        fig_line.update_layout(
-            legend_title_text="",
-            font_color="#FFFFFF",
-            margin=dict(l=20, r=20, t=60, b=20),
-            xaxis=dict(gridcolor="#555555"),
-            yaxis=dict(gridcolor="#555555"),
-            title_font_color="#FFFFFF"
+    if "General" not in filtro_pais:
+        fig_line = px.line(
+            data_tc,
+            x="Year",
+            y="Approval Amount",
+            color="Project Country",
+            title="Evolución del Monto Aprobado (Technical Cooperation)",
+            labels={
+                "Year": "Año",
+                "Approval Amount": "Monto Aprobado",
+                "Project Country": "País"
+            },
+            markers=True,
+            color_discrete_map=color_map
         )
-        st.plotly_chart(fig_line, use_container_width=True)
-
-    # -------------------------------------------------------------------------
-    # CÁLCULO Y GRÁFICA DEL PORCENTAJE DE TCs
-    # -------------------------------------------------------------------------
-    with st.container():
-        st.subheader("Porcentaje de Cooperaciones Técnicas en el Total")
-
-        data_filtrado = data[
-            (data["Year"] >= rango_anios[0]) 
-            & (data["Year"] <= rango_anios[1])
-        ]
-        resumen_anual_total = data_filtrado.groupby("Year")["Approval Amount"].sum().reset_index()
-        
-        if "General" not in filtro_pais:
-            resumen_anual_tc = data_tc.groupby(["Year"])["Approval Amount"].sum().reset_index()
-        else:
-            resumen_anual_tc = data_tc
-
-        porcentaje_tc = resumen_anual_tc.merge(
-            resumen_anual_total,
-            on="Year",
-            suffixes=("_tc", "_total")
+    else:
+        fig_line = px.line(
+            data_tc,
+            x="Year",
+            y="Approval Amount",
+            title="Evolución del Monto Aprobado (Technical Cooperation)",
+            labels={"Year": "Año", "Approval Amount": "Monto Aprobado"},
+            markers=True
         )
-        porcentaje_tc["Porcentaje TC"] = (
-            porcentaje_tc["Approval Amount_tc"] / porcentaje_tc["Approval Amount_total"] * 100
-        )
-        
-        fig_lollipop = go.Figure()
+        fig_line.update_traces(line_color="#ee6c4d")
 
-        for _, row in porcentaje_tc.iterrows():
-            fig_lollipop.add_trace(
-                go.Scatter(
-                    x=[0, row["Porcentaje TC"]],
-                    y=[row["Year"], row["Year"]],
-                    mode="lines",
-                    line=dict(color="#999999", width=2),
-                    showlegend=False
-                )
-            )
+    fig_line.update_traces(line_shape='spline')
+    fig_line.update_layout(
+        legend_title_text="",
+        font_color="#FFFFFF",
+        margin=dict(l=20, r=20, t=60, b=20),
+        xaxis=dict(gridcolor="#555555"),
+        yaxis=dict(gridcolor="#555555"),
+        title_font_color="#FFFFFF"
+    )
+    st.plotly_chart(fig_line, use_container_width=True)
 
+    # Gráfico 2: Porcentaje de TCs
+    st.subheader("Porcentaje de Cooperaciones Técnicas en el Total")
+    data_filtrado = data[
+        (data["Year"] >= rango_anios[0]) & (data["Year"] <= rango_anios[1])
+    ]
+    resumen_anual_total = data_filtrado.groupby("Year")["Approval Amount"].sum().reset_index()
+
+    if "General" not in filtro_pais:
+        resumen_anual_tc = data_tc.groupby(["Year"])["Approval Amount"].sum().reset_index()
+    else:
+        resumen_anual_tc = data_tc
+
+    porcentaje_tc = resumen_anual_tc.merge(
+        resumen_anual_total,
+        on="Year",
+        suffixes=("_tc", "_total")
+    )
+    porcentaje_tc["Porcentaje TC"] = (
+        porcentaje_tc["Approval Amount_tc"] / porcentaje_tc["Approval Amount_total"] * 100
+    )
+    
+    fig_lollipop = go.Figure()
+    for _, row in porcentaje_tc.iterrows():
         fig_lollipop.add_trace(
             go.Scatter(
-                x=porcentaje_tc["Porcentaje TC"],
-                y=porcentaje_tc["Year"],
-                mode="markers+text",
-                marker=dict(color="crimson", size=10),
-                text=round(porcentaje_tc["Porcentaje TC"], 2),
-                textposition="middle right",
-                textfont=dict(color="#FFFFFF"),
-                name="Porcentaje TC"
+                x=[0, row["Porcentaje TC"]],
+                y=[row["Year"], row["Year"]],
+                mode="lines",
+                line=dict(color="#999999", width=2),
+                showlegend=False
             )
         )
-
-        fig_lollipop.update_layout(
-            title="Porcentaje de Cooperaciones Técnicas en el Total de Aprobaciones",
-            xaxis_title="Porcentaje (%)",
-            yaxis_title="Año",
-            xaxis=dict(showgrid=True, zeroline=False, gridcolor="#555555"),
-            yaxis=dict(showgrid=False, zeroline=False),
-            font_color="#FFFFFF",
-            height=600,
-            margin=dict(l=20, r=20, t=60, b=20)
+    fig_lollipop.add_trace(
+        go.Scatter(
+            x=porcentaje_tc["Porcentaje TC"],
+            y=porcentaje_tc["Year"],
+            mode="markers+text",
+            marker=dict(color="crimson", size=10),
+            text=round(porcentaje_tc["Porcentaje TC"], 2),
+            textposition="middle right",
+            textfont=dict(color="#FFFFFF"),
+            name="Porcentaje TC"
         )
-        st.plotly_chart(fig_lollipop, use_container_width=True)
+    )
+
+    fig_lollipop.update_layout(
+        title="Porcentaje de Cooperaciones Técnicas en el Total de Aprobaciones",
+        xaxis_title="Porcentaje (%)",
+        yaxis_title="Año",
+        xaxis=dict(showgrid=True, zeroline=False, gridcolor="#555555"),
+        yaxis=dict(showgrid=False, zeroline=False),
+        font_color="#FFFFFF",
+        height=600,
+        margin=dict(l=20, r=20, t=60, b=20)
+    )
+    st.plotly_chart(fig_lollipop, use_container_width=True)
 
 
 # -----------------------------------------------------------------------------
 # PÁGINA 3: FLUJOS AGREGADOS
 # -----------------------------------------------------------------------------
 def flujos_agregados():
-    """Página de Flujos Agregados."""
     st.markdown('<h1 class="title">Flujos Agregados</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Analiza la información agregada de flujos relacionados con tus proyectos.</p>', unsafe_allow_html=True)
-
     st.write("Contenido de la página 'Flujos Agregados'.")
 
 
@@ -284,54 +268,47 @@ def flujos_agregados():
 # PÁGINA 4: GEODATA
 # -----------------------------------------------------------------------------
 def geodata():
-    """Página de GeoData."""
     st.markdown('<h1 class="title">GeoData</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora datos geoespaciales de los proyectos.</p>', unsafe_allow_html=True)
-
     st.write("Contenido de la página 'GeoData'.")
 
 
 # -----------------------------------------------------------------------------
-# PÁGINA 5: ANÁLISIS EXPLORATORIO (PYGWALKER STREAMLITRENDERER)
+# PÁGINA 5: ANÁLISIS EXPLORATORIO (PYGWALKER - STREAMLITRENDERER)
 # -----------------------------------------------------------------------------
 def analisis_exploratorio():
     """
     Página de Análisis Exploratorio con StreamlitRenderer de PyGwalker.
-    Dos modos:
-      - "Exploración Simple": sin spec.
-      - "Cargar Spec": el usuario pega un JSON de configuración previa.
+    Demonstramos el uso de tabs para distintas vistas:
+      - Explorer: interfaz completa
+      - Data: inicia en la pestaña "data"
+      - Charts: gráficos registrados (chart(0), chart(1), etc.)
     """
     st.markdown('<h1 class="title">Análisis Exploratorio</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Explora interactivamente los datos con Pygwalker.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Explora datos con Pygwalker en distintas vistas.</p>', unsafe_allow_html=True)
 
-    # Barra lateral: elegir la BDD y el modo
-    st.sidebar.header("Seleccione la BDD y el Modo")
-    selected_dataset_name = st.sidebar.selectbox(
-        "Selecciona la BDD:",
-        list(DATASETS.keys())
-    )
+    # Obtenemos el renderer (cacheado), con kernel_computation y spec_io_mode
+    renderer = get_pyg_renderer()
 
-    modo_exploracion = st.sidebar.radio(
-        "Modo de Exploración:",
-        ["Exploración Simple", "Cargar Spec"]
-    )
+    tab1, tab2, tab3 = st.tabs(["Explorer", "Data", "Charts"])
 
-    df = DATASETS[selected_dataset_name]
+    with tab1:
+        st.write("**Interfaz completa**")
+        renderer.explorer(height=800)  # Vista "vis" por defecto
 
-    st.write("---")
-    st.write("**Interfaz de Análisis (Pygwalker):**")
+    with tab2:
+        st.write("**Vista de Datos**")
+        renderer.explorer(default_tab="data", height=800)  # Muestra la pestaña "data"
 
-    if modo_exploracion == "Exploración Simple":
-        # Exploración sin spec (arranca en blanco)
-        pyg_app = StreamlitRenderer(df)
-        pyg_app.explorer()
-    else:
-        # Cargar spec (un JSON) que el usuario pega en un text_area
-        st.info("Pega aquí el 'vis_spec' (JSON) que copiaste de otra sesión de Pygwalker.")
-        vis_spec = st.text_area("vis_spec:", value="", height=200)
-
-        pyg_app = StreamlitRenderer(df, spec=vis_spec)
-        pyg_app.explorer()
+    with tab3:
+        st.write("**Algunos Charts Registrados**")
+        st.info("Asumiendo que hayas creado y guardado charts en la interfaz, podrían verse aquí.")
+        
+        st.subheader("Ejemplo: Chart(0)")
+        renderer.chart(0, height=400)
+        
+        st.subheader("Ejemplo: Chart(1)")
+        renderer.chart(1, height=400)
 
 
 # -----------------------------------------------------------------------------
