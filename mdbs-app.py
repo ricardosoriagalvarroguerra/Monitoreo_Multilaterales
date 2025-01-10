@@ -61,11 +61,9 @@ st.markdown(
 
 # -----------------------------------------------------------------------------
 # LECTURA Y ALMACENAMIENTO DE BDD EN UN DICCIONARIO
-# Ajusta según tus rutas, por ejemplo si tienes un Parquet
 # -----------------------------------------------------------------------------
 df_iadb = pd.read_parquet("IADB_DASH_BDD.parquet")
 
-# Si en el futuro tienes más DataFrames, agrégalos aquí
 DATASETS = {
     "IADB_DASH_BDD": df_iadb
 }
@@ -78,9 +76,7 @@ def monitoreo_multilaterales():
     st.markdown('<h1 class="title">Monitoreo Multilaterales</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Página principal para el seguimiento de proyectos e información multinacional.</p>', unsafe_allow_html=True)
     
-    # ==========================
     # Lógica de Monitoreo Multilaterales
-    # ==========================
     st.write("Contenido de la página 'Monitoreo Multilaterales'.")
 
 
@@ -92,20 +88,16 @@ def cooperaciones_tecnicas():
     st.markdown('<h1 class="title">Cooperaciones Técnicas</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Visualiza y analiza las cooperaciones técnicas aprobadas según país y año.</p>', unsafe_allow_html=True)
 
-    # Usamos el DataFrame que ya cargamos en DATASETS
     data = DATASETS["IADB_DASH_BDD"].copy()
 
     # Conversión de la columna "Approval Date" a datetime
     data["Approval Date"] = pd.to_datetime(data["Approval Date"], errors="coerce")
     data["Year"] = data["Approval Date"].dt.year
 
-    # -------------------------------------------------------------------------
     # SIDEBAR: FILTROS
-    # -------------------------------------------------------------------------
     st.sidebar.header("Filtros (Cooperaciones Técnicas)")
     st.sidebar.write("Utiliza estos filtros para refinar la información mostrada:")
 
-    # Filtro de país
     paises_disponibles = ["General", "Argentina", "Bolivia", "Brazil", "Paraguay", "Uruguay"]
     filtro_pais = st.sidebar.multiselect(
         "Selecciona uno o varios países (o General para todos):",
@@ -113,17 +105,14 @@ def cooperaciones_tecnicas():
         default=["General"]
     )
     
-    # Filtro de rango de años (2000 a 2024)
     rango_anios = st.sidebar.slider(
         "Selecciona el rango de años:",
-        2000,  # Valor mínimo fijo
-        2024,  # Valor máximo fijo
-        (2000, 2024)  # Rango inicial por defecto
+        2000,
+        2024,
+        (2000, 2024)
     )
     
-    # -------------------------------------------------------------------------
     # PROCESAMIENTO DE DATOS
-    # -------------------------------------------------------------------------
     data = data[(data["Year"] >= 2000) & (data["Year"] <= 2024)]
 
     if "General" not in filtro_pais:
@@ -142,9 +131,7 @@ def cooperaciones_tecnicas():
         ]
         data_tc = data_tc.groupby("Year")["Approval Amount"].sum().reset_index()
     
-    # -------------------------------------------------------------------------
     # SECCIÓN DE GRÁFICAS
-    # -------------------------------------------------------------------------
     with st.container():
         st.subheader("Serie de Tiempo de Monto Aprobado")
 
@@ -193,9 +180,6 @@ def cooperaciones_tecnicas():
         )
         st.plotly_chart(fig_line, use_container_width=True)
 
-    # -------------------------------------------------------------------------
-    # CÁLCULO Y GRÁFICA DEL PORCENTAJE DE TCs
-    # -------------------------------------------------------------------------
     with st.container():
         st.subheader("Porcentaje de Cooperaciones Técnicas en el Total")
 
@@ -308,9 +292,7 @@ def analisis_exploratorio():
     # Obtenemos el DataFrame elegido
     df = DATASETS[selected_dataset_name]
 
-    # Vista previa
-    st.write("**Vista previa del DataFrame:**")
-    st.dataframe(df.head(5))
+    # Aquí eliminamos la parte que mostraba df.head(5)
 
     st.write("---")
     st.write("**Interfaz de Análisis (Pygwalker):**")
