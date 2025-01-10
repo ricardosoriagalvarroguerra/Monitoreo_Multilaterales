@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+# Importar la versión "streamlit" de PyGwalker
+from pygwalker.api.streamlit import StreamlitRenderer
 import pygwalker as pyg
 
 # -----------------------------------------------------------------------------
@@ -59,12 +61,13 @@ st.markdown(
 
 # -----------------------------------------------------------------------------
 # LECTURA Y ALMACENAMIENTO DE BDD EN UN DICCIONARIO
+# Ajusta según tus rutas, por ejemplo si tienes un Parquet
 # -----------------------------------------------------------------------------
 df_iadb = pd.read_parquet("IADB_DASH_BDD.parquet")
 
+# Si en el futuro tienes más DataFrames, agrégalos aquí
 DATASETS = {
     "IADB_DASH_BDD": df_iadb
-    # Si deseas, añade más DataFrames en este diccionario
 }
 
 # -----------------------------------------------------------------------------
@@ -93,7 +96,7 @@ def cooperaciones_tecnicas():
     data = DATASETS["IADB_DASH_BDD"].copy()
 
     # Conversión de la columna "Approval Date" a datetime
-    data["Approval Date"] = pd.to_datetime(data["Approval Date"])
+    data["Approval Date"] = pd.to_datetime(data["Approval Date"], errors="coerce")
     data["Year"] = data["Approval Date"].dt.year
 
     # -------------------------------------------------------------------------
@@ -121,7 +124,6 @@ def cooperaciones_tecnicas():
     # -------------------------------------------------------------------------
     # PROCESAMIENTO DE DATOS
     # -------------------------------------------------------------------------
-    # Primero filtramos el dataset a ese rango de años
     data = data[(data["Year"] >= 2000) & (data["Year"] <= 2024)]
 
     if "General" not in filtro_pais:
@@ -146,7 +148,6 @@ def cooperaciones_tecnicas():
     with st.container():
         st.subheader("Serie de Tiempo de Monto Aprobado")
 
-        # Definimos un mapeo de colores para los países
         color_map = {
             "Argentina": "#8ecae6",
             "Bolivia": "#41af20",
@@ -156,7 +157,6 @@ def cooperaciones_tecnicas():
         }
 
         if "General" not in filtro_pais:
-            # Gráfico con color según Project Country
             fig_line = px.line(
                 data_tc,
                 x="Year",
@@ -172,7 +172,6 @@ def cooperaciones_tecnicas():
                 color_discrete_map=color_map
             )
         else:
-            # "General" => solo hay una serie, le asignamos color #ee6c4d
             fig_line = px.line(
                 data_tc,
                 x="Year",
@@ -186,7 +185,7 @@ def cooperaciones_tecnicas():
         fig_line.update_traces(line_shape='spline')
         fig_line.update_layout(
             legend_title_text="",
-            font_color="#FFFFFF",  # Texto claro
+            font_color="#FFFFFF",
             margin=dict(l=20, r=20, t=60, b=20),
             xaxis=dict(gridcolor="#555555"),
             yaxis=dict(gridcolor="#555555"),
@@ -267,9 +266,6 @@ def flujos_agregados():
     st.markdown('<h1 class="title">Flujos Agregados</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Analiza la información agregada de flujos relacionados con tus proyectos.</p>', unsafe_allow_html=True)
 
-    # ==========================
-    # Lógica de Flujos Agregados
-    # ==========================
     st.write("Contenido de la página 'Flujos Agregados'.")
 
 
@@ -281,28 +277,35 @@ def geodata():
     st.markdown('<h1 class="title">GeoData</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora datos geoespaciales de los proyectos.</p>', unsafe_allow_html=True)
 
-    # ==========================
-    # Lógica de GeoData
-    # ==========================
     st.write("Contenido de la página 'GeoData'.")
 
 
 # -----------------------------------------------------------------------------
-# PÁGINA 5: ANÁLISIS EXPLORATORIO (PYGWALKER)
+# PÁGINA 5: ANÁLISIS EXPLORATORIO (PYGWALKER STREAMLITRENDERER)
 # -----------------------------------------------------------------------------
 def analisis_exploratorio():
-    """Página de Análisis Exploratorio usando Pygwalker integrado a Streamlit."""
+    """
+    Página de Análisis Exploratorio utilizando StreamlitRenderer de PyGwalker.
+    Incluimos dos modos:
+      1. "Exploración Simple": arranca sin un spec.
+      2. "Cargar Spec": el usuario puede pegar un JSON de configuración previa.
+    """
     st.markdown('<h1 class="title">Análisis Exploratorio</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora interactivamente los datos con Pygwalker.</p>', unsafe_allow_html=True)
 
-    # Barra lateral: elegir la BDD
-    st.sidebar.header("Seleccione la BDD a Analizar")
+    # Barra lateral: elegir la BDD y el modo
+    st.sidebar.header("Seleccione la BDD y el Modo")
     selected_dataset_name = st.sidebar.selectbox(
         "Selecciona la BDD:",
         list(DATASETS.keys())
     )
 
-    # Obtenemos el DataFrame
+    modo_exploracion = st.sidebar.radio(
+        "Modo de Exploración:",
+        ["Exploración Simple", "Cargar Spec"]
+    )
+
+    # Obtenemos el DataFrame elegido
     df = DATASETS[selected_dataset_name]
 
     # Vista previa
@@ -312,8 +315,18 @@ def analisis_exploratorio():
     st.write("---")
     st.write("**Interfaz de Análisis (Pygwalker):**")
 
-    # Pygwalker integrado con env="Streamlit"
-    pyg.walk(df, env="Streamlit")
+    if modo_exploracion == "Exploración Simple":
+        # Exploración sin spec (arranca en blanco)
+        pyg_app = StreamlitRenderer(df)  # sin 'spec=' => ""
+        pyg_app.explorer()
+    else:
+        # Cargar spec (un JSON) que el usuario pega en un text_area
+        st.info("Pega aquí el 'vis_spec' (JSON) que copiaste de otra sesión de Pygwalker.")
+        vis_spec = st.text_area("vis_spec:", value="", height=200)
+
+        pyg_app = StreamlitRenderer(df, spec=vis_spec)
+        pyg_app.explorer()
+
 
 # -----------------------------------------------------------------------------
 # DICCIONARIO DE PÁGINAS
