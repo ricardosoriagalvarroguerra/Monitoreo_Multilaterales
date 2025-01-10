@@ -59,36 +59,37 @@ st.markdown(
 )
 
 # -----------------------------------------------------------------------------
-# 1. CARGA DE DATOS (CACHÉ)
+# 1. CARGA DE DATOS (CACHÉ) - PUEDES AGREGAR MÁS Datasets EN EL DICCIONARIO
 # -----------------------------------------------------------------------------
 @st.cache_data
 def load_dataframes():
     """Lee y devuelve los DataFrames usados en la aplicación."""
     df_iadb = pd.read_parquet("IADB_DASH_BDD.parquet")
     
-    # Agrega más dataframes si los necesitas
+    # Ejemplo: Si tienes otros datasets, agrégalos al diccionario
     datasets = {
-        "IADB_DASH_BDD": df_iadb
+        "IADB_DASH_BDD": df_iadb,
+        # "Otro_Dataset": pd.read_csv("otra_ruta.csv"),
+        # ...
     }
     return datasets
 
 DATASETS = load_dataframes()
 
 # -----------------------------------------------------------------------------
-# 2. CREACIÓN DEL RENDERER DE PYGWALKER (CACHÉ)
+# 2. CREACIÓN DEL RENDERER DE PYGWALKER (CACHÉ) CON KERNEL COMPUTATION
 # -----------------------------------------------------------------------------
 @st.cache_resource
-def get_pyg_renderer():
+def get_pyg_renderer_by_name(dataset_name: str) -> StreamlitRenderer:
     """
-    Instancia el StreamlitRenderer de PyGWalker con kernel_computation=True
-    para acelerar cálculos en grandes datasets.
+    Crea un StreamlitRenderer para el dataset especificado.
+    kernel_computation=True para alto rendimiento.
     """
-    df = DATASETS["IADB_DASH_BDD"]
+    df = DATASETS[dataset_name]
     renderer = StreamlitRenderer(
         df,
-        kernel_computation=True  # Activamos la opción de alto rendimiento
-        # Si deseas usar spec_io_mode="rw" o un spec, podrías añadirlo:
-        # spec_io_mode="rw", spec="./gw_config.json"
+        kernel_computation=True  # Acelera cálculos en grandes datasets
+        # Si quieres, puedes usar spec_io_mode="rw", spec="./gw_config.json", etc.
     )
     return renderer
 
@@ -98,6 +99,7 @@ def get_pyg_renderer():
 def monitoreo_multilaterales():
     st.markdown('<h1 class="title">Monitoreo Multilaterales</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Página principal para el seguimiento de proyectos e información multinacional.</p>', unsafe_allow_html=True)
+    
     st.write("Contenido de la página 'Monitoreo Multilaterales'.")
 
 
@@ -129,7 +131,7 @@ def cooperaciones_tecnicas():
         (2000, 2024)
     )
     
-    # Filtra el DF
+    # Filtrar por año
     data = data[(data["Year"] >= 2000) & (data["Year"] <= 2024)]
 
     if "General" not in filtro_pais:
@@ -148,8 +150,8 @@ def cooperaciones_tecnicas():
         ]
         data_tc = data_tc.groupby("Year")["Approval Amount"].sum().reset_index()
     
-    # Gráfico 1: Serie de Tiempo
     st.subheader("Serie de Tiempo de Monto Aprobado")
+
     color_map = {
         "Argentina": "#8ecae6",
         "Bolivia": "#41af20",
@@ -158,7 +160,6 @@ def cooperaciones_tecnicas():
         "Uruguay": "#1c5d99",
     }
 
-    import plotly.express as px
     if "General" not in filtro_pais:
         fig_line = px.line(
             data_tc,
@@ -196,9 +197,12 @@ def cooperaciones_tecnicas():
     )
     st.plotly_chart(fig_line, use_container_width=True)
 
-    # Gráfico 2: Porcentaje de TCs
+    # Porcentaje de TCs
     st.subheader("Porcentaje de Cooperaciones Técnicas en el Total")
-    data_filtrado = data[(data["Year"] >= rango_anios[0]) & (data["Year"] <= rango_anios[1])]
+
+    data_filtrado = data[
+        (data["Year"] >= rango_anios[0]) & (data["Year"] <= rango_anios[1])
+    ]
     resumen_anual_total = data_filtrado.groupby("Year")["Approval Amount"].sum().reset_index()
 
     if "General" not in filtro_pais:
@@ -215,7 +219,6 @@ def cooperaciones_tecnicas():
         porcentaje_tc["Approval Amount_tc"] / porcentaje_tc["Approval Amount_total"] * 100
     )
     
-    import plotly.graph_objects as go
     fig_lollipop = go.Figure()
     for _, row in porcentaje_tc.iterrows():
         fig_lollipop.add_trace(
@@ -259,6 +262,7 @@ def cooperaciones_tecnicas():
 def flujos_agregados():
     st.markdown('<h1 class="title">Flujos Agregados</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Analiza la información agregada de flujos relacionados con tus proyectos.</p>', unsafe_allow_html=True)
+
     st.write("Contenido de la página 'Flujos Agregados'.")
 
 
@@ -268,25 +272,29 @@ def flujos_agregados():
 def geodata():
     st.markdown('<h1 class="title">GeoData</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora datos geoespaciales de los proyectos.</p>', unsafe_allow_html=True)
+
     st.write("Contenido de la página 'GeoData'.")
 
 
 # -----------------------------------------------------------------------------
-# PÁGINA 5: ANÁLISIS EXPLORATORIO (PYGWALKER)
+# PÁGINA 5: ANÁLISIS EXPLORATORIO (PYGWALKER) CON SELECTOR DE DATASET
 # -----------------------------------------------------------------------------
 def analisis_exploratorio():
     """
-    Página de Análisis Exploratorio con kernel_computation=True.
-    No se usan múltiples vistas, ni el argumento 'height'.
+    Página de Análisis Exploratorio con PyGWalker y kernel_computation=True.
+    Se añade un selector en la barra lateral para elegir la BDD a analizar.
     """
     st.markdown('<h1 class="title">Análisis Exploratorio</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora datos con PyGWalker (alto rendimiento).</p>', unsafe_allow_html=True)
 
-    # Obtenemos el renderer (cacheado), con kernel_computation=True
-    renderer = get_pyg_renderer()
+    st.sidebar.header("Selecciona la BDD para analizar")
+    selected_dataset = st.sidebar.selectbox("Base de datos:", list(DATASETS.keys()))
 
-    # Simplemente mostramos la interfaz de PygWalker completa
-    renderer.explorer()  # No pasamos 'height' ni otras vistas
+    # Obtenemos el renderer con kernel_computation=True
+    renderer = get_pyg_renderer_by_name(selected_dataset)
+
+    # Mostramos la interfaz exploratoria
+    renderer.explorer()
 
 
 # -----------------------------------------------------------------------------
