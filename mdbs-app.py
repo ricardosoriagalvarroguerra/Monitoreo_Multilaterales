@@ -289,59 +289,67 @@ def geodata():
     st.markdown('<h1 class="title">GeoData</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora datos geoespaciales de los proyectos.</p>', unsafe_allow_html=True)
     
-    # Cargamos el dataset con información geográfica
+    # 1. Cargar el dataset
     data = DATASETS["LOCATION_IADB"].copy()
 
-    # Asignamos colores para cada "Sector"
-    sectores = data['Sector'].dropna().unique()
+    # 2. Preparar listado de sectores y un mapa de colores discreto
+    sectores = data['Sector'].dropna().unique()  # Sectores distintos
     color_list = list(mcolors.TABLEAU_COLORS.values())
     color_map = {}
     for sector, color in zip(sectores, color_list):
         color_map[sector] = color
 
-    # Filtro de la barra lateral para "Sector"
+    # 3. Filtro de la barra lateral para "Sector"
     st.sidebar.header("Filtros (GeoData)")
     filtro_sector = st.sidebar.selectbox(
         "Selecciona el sector a visualizar:",
         options=["General"] + list(sectores),
         index=0
     )
-    
-    # Filtramos el dataframe si se selecciona un sector específico
+
+    # 4. Filtrar el dataframe si no es "General"
     data_filtrada = data.copy()
     if filtro_sector != "General":
         data_filtrada = data_filtrada[data_filtrada['Sector'] == filtro_sector]
 
-    # Si el filtro deja el DataFrame vacío, mostramos advertencia
-    if len(data_filtrada) == 0:
+    # Si no hay datos tras filtrar, mostrar advertencia
+    if data_filtrada.empty:
         st.warning("No se encontraron datos para el sector seleccionado.")
         return
 
-    # Creamos el mapa centrado en la media de las coordenadas filtradas
-    m = folium.Map(
-        location=[data_filtrada['Latitude'].mean(), data_filtrada['Longitude'].mean()],
-        zoom_start=3,
-        tiles="CartoDB dark_matter"
+    # 5. Generar la paleta de colores para Plotly a partir del color_map
+    #    (solo para los sectores que tengamos tras filtrar)
+    color_discrete_map = {}
+    for sec in data_filtrada["Sector"].unique():
+        color_discrete_map[sec] = color_map.get(sec, "#4682B4")  # color por defecto
+
+    # 6. Crear la figura con Plotly Express scatter_mapbox
+    fig = px.scatter_mapbox(
+        data_filtrada,
+        lat="Latitude",
+        lon="Longitude",
+        color="Sector",
+        # Tamaño de cada punto (fijo o basado en alguna columna)
+        size_max=15,
+        hover_name="iatiidentifier",  # aparece como título en el hover
+        hover_data=["recipientcountry_codename", "Sector"],  # datos adicionales en tooltip
+        color_discrete_map=color_discrete_map,
+        zoom=3,  # nivel de zoom inicial
+        center={
+            "lat": data_filtrada['Latitude'].mean(), 
+            "lon": data_filtrada['Longitude'].mean()
+        },
+        height=600  # altura del mapa
     )
 
-    # Añadimos cada punto de manera individual, sin clusterizar
-    for _, row in data_filtrada.iterrows():
-        popup_info = f"""
-        <strong>ID:</strong> {row.get('iatiidentifier', 'N/A')}<br>
-        <strong>Country:</strong> {row.get('recipientcountry_codename', 'N/A')}<br>
-        <strong>Sector:</strong> {row.get('Sector', 'N/A')}
-        """
-        folium.CircleMarker(
-            location=(row['Latitude'], row['Longitude']),
-            radius=7,
-            popup=folium.Popup(popup_info, max_width=300),
-            color=color_map.get(row['Sector'], '#3388ff'),
-            fill=True,
-            fill_opacity=0.6
-        ).add_to(m)
+    # 7. Estilo “dark” de Mapbox y ajustes de márgenes
+    fig.update_layout(
+        mapbox_style="carto-darkmatter",
+        margin={"r":0, "t":0, "l":0, "b":0}
+    )
 
-    # Mostramos el mapa en Streamlit
-    st_folium(m, width=800, height=600)
+    # 8. Mostrar el mapa con Plotly en Streamlit
+    st.plotly_chart(fig, use_container_width=True)
 
 
 # -----------------------------------------------------------------------------
