@@ -288,105 +288,126 @@ def flujos_agregados():
         ("Aprobaciones", "Desembolsos", "Instrumentos")
     )
 
-    # Cargamos el dataset correspondiente
-    data = DATASETS["OUTGOING_IADB"].copy()
-
-    # -------------------------------------------------------------------------
-    # SUBPÁGINA: APROBACIONES
-    # -------------------------------------------------------------------------
     if subpagina == "Aprobaciones":
         st.markdown("## Aprobaciones")
-        st.markdown("### Montos globales y por región")
-
-        # Convertir la columna de fecha a tipo datetime y extraer el año
-        data["year"] = pd.to_datetime(data["transactiondate_isodate"], errors="coerce").dt.year
 
         # ---------------------------------------------------------------------
-        # (A) Gráfico general de barras por año (sin filtros)
+        # 1. CARGAR Y PREPARAR DATOS
         # ---------------------------------------------------------------------
+        data = DATASETS["OUTGOING_IADB"].copy()
+
+        # Convertimos columna de fecha a datetime
+        data["transactiondate_isodate"] = pd.to_datetime(data["transactiondate_isodate"], errors="coerce")
+        data["year"] = data["transactiondate_isodate"].dt.year
+
+        # Resumen global (sin filtro), agrupado por año
         resumen_global = (
             data.groupby("year")["value_usd"]
             .sum()
             .reset_index()
             .rename(columns={"year": "Año", "value_usd": "Monto (USD)"})
+            .sort_values("Año")
         )
 
-        fig_global = px.bar(
-            resumen_global,
-            x="Año",
-            y="Monto (USD)",
-            title="Montos por Año (Global)"
-        )
-        # Remover fondo del gráfico
-        fig_global.update_layout(
-            plot_bgcolor="rgba(0,0,0,0)",
-            paper_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(showgrid=False),
-            yaxis=dict(showgrid=False),
-            font_color="#FFFFFF"
-        )
-        st.plotly_chart(fig_global, use_container_width=True)
+        # Calcular variación interanual (YoY) como %:
+        # yoy = (monto_año_actual - monto_año_anterior) / monto_año_anterior * 100
+        resumen_global["Var. Interanual (%)"] = (
+            resumen_global["Monto (USD)"].pct_change() * 100
+        ).fillna(0)
 
         # ---------------------------------------------------------------------
-        # (B) Filtro por Región y, luego, por País
+        # 2. CREAR FILTROS: REGIÓN Y PAÍS
         # ---------------------------------------------------------------------
         st.sidebar.header("Filtros (Aprobaciones)")
 
-        # 1. Filtro por región
+        # Filtro por Región (MULTISELECT)
         regiones_disponibles = sorted(data["region"].dropna().unique())
-        region_seleccionada = st.sidebar.selectbox(
-            "Selecciona la región:",
-            options=["Todas"] + regiones_disponibles,
-            index=0
+        regiones_seleccionadas = st.sidebar.multiselect(
+            "Selecciona una o varias regiones:",
+            options=regiones_disponibles,
+            default=[]  # sin nada al inicio
         )
 
-        # Copiamos el dataset original para ir filtrando según selección
-        data_filtrada = data.copy()
-
-        if region_seleccionada != "Todas":
-            data_filtrada = data_filtrada[data_filtrada["region"] == region_seleccionada]
-
-            # 2. Activar filtro por país solo si se seleccionó una región
-            paises_region = sorted(data_filtrada["recipientcountry_codename"].dropna().unique())
-            pais_seleccionado = st.sidebar.selectbox(
-                "Selecciona el país:",
-                options=["Todos"] + paises_region,
-                index=0
-            )
-            if pais_seleccionado != "Todos":
-                data_filtrada = data_filtrada[data_filtrada["recipientcountry_codename"] == pais_seleccionado]
-
-        # ---------------------------------------------------------------------
-        # (C) Gráfico con los filtros aplicados
-        # ---------------------------------------------------------------------
-        if data_filtrada.empty:
-            st.warning("No se encontraron datos con los filtros aplicados.")
+        # Filtrar datos por las regiones seleccionadas (si hay)
+        if len(regiones_seleccionadas) > 0:
+            data_filtrada = data[data["region"].isin(regiones_seleccionadas)].copy()
         else:
-            resumen_filtrado = (
-                data_filtrada.groupby("year")["value_usd"]
-                .sum()
-                .reset_index()
-                .rename(columns={"year": "Año", "value_usd": "Monto (USD)"})
+            data_filtrada = data.copy()  # sin filtro de región
+
+        # Filtro por País, sólo habilitado si existe al menos una región seleccionada
+        if len(regiones_seleccionadas) > 0:
+            paises_disponibles = sorted(data_filtrada["recipientcountry_codename"].dropna().unique())
+            paises_seleccionados = st.sidebar.multiselect(
+                "Selecciona uno o varios países (opcional):",
+                options=paises_disponibles,
+                default=[]
             )
-            fig_filtrado = px.bar(
+            if len(paises_seleccionados) > 0:
+                data_filtrada = data_filtrada[data_filtrada["recipientcountry_codename"].isin(paises_seleccionados)]
+        else:
+            # Si no hay región seleccionada, no hay filtro de países
+            paises_seleccionados = []
+
+        # Crear nuevo resumen según filtros
+        resumen_filtrado = (
+            data_filtrada.groupby("year")["value_usd"]
+            .sum()
+            .reset_index()
+            .rename(columns={"year": "Año", "value_usd": "Monto (USD)"})
+            .sort_values("Año")
+        )
+        resumen_filtrado["Var. Interanual (%)"] = (
+            resumen_filtrado["Monto (USD)"].pct_change() * 100
+        ).fillna(0)
+
+        # ---------------------------------------------------------------------
+        # 3. DIBUJAR GRÁFICOS (2 COLUMNAS)
+        # ---------------------------------------------------------------------
+        col_barras, col_lineas = st.columns(2, gap="medium")
+
+        # ------------------- (A) GRÁFICO DE BARRAS ---------------------------
+        with col_barras:
+            st.subheader("Monto Total por Año")
+            fig_barras = px.bar(
                 resumen_filtrado,
                 x="Año",
                 y="Monto (USD)",
-                title="Montos por Año (Filtrado)"
+                text="Monto (USD)",
+                title="",
             )
-            # Remover fondo del gráfico
-            fig_filtrado.update_layout(
+            # Quitar fondos
+            fig_barras.update_layout(
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
                 xaxis=dict(showgrid=False),
                 yaxis=dict(showgrid=False),
                 font_color="#FFFFFF"
             )
-            st.plotly_chart(fig_filtrado, use_container_width=True)
+            fig_barras.update_traces(textposition="outside")
+            st.plotly_chart(fig_barras, use_container_width=True)
 
-    # -------------------------------------------------------------------------
-    # SUBPÁGINAS: DESEMBOLSOS / INSTRUMENTOS (EN DESARROLLO)
-    # -------------------------------------------------------------------------
+        # ------------------ (B) GRÁFICO DE LÍNEA (VAR. YoY) ------------------
+        with col_lineas:
+            st.subheader("Variación Interanual (%)")
+            fig_lineas = px.line(
+                resumen_filtrado,
+                x="Año",
+                y="Var. Interanual (%)",
+                markers=True
+            )
+            fig_lineas.update_traces(
+                line_shape="spline"
+            )
+            # Quitar fondos
+            fig_lineas.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=False),
+                font_color="#FFFFFF"
+            )
+            st.plotly_chart(fig_lineas, use_container_width=True)
+
     elif subpagina == "Desembolsos":
         st.markdown("## Desembolsos")
         st.markdown("### Esta sección está en desarrollo. Volveremos pronto.")
