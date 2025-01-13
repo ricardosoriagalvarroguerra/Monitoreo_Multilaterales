@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from pygwalker.api.streamlit import StreamlitRenderer
 import pygwalker as pyg
 
-import matplotlib.colors as mcolors  # Para usar TABLEAU_COLORS u otras paletas
+import matplotlib.colors as mcolors
 import folium
 from streamlit_folium import st_folium
 from folium.plugins import MarkerCluster
@@ -69,25 +69,28 @@ st.markdown(
 @st.cache_data
 def load_dataframes():
     """Lee y devuelve los DataFrames usados en la aplicación."""
-    # Dataset principal
+    # Dataset principal (ejemplo)
     df_iadb = pd.read_parquet("IADB_DASH_BDD.parquet")
 
     # Dataset con lat/long en la columna 'point_pos'
     df_location = pd.read_parquet("location_iadb.parquet")
-    # Separar 'point_pos' (ej: "40.7128,-74.0060") en columnas 'Latitude' y 'Longitude'
+    # Separar 'point_pos' en columnas 'Latitude' y 'Longitude'
     df_location[["Latitude", "Longitude"]] = df_location["point_pos"].str.split(",", expand=True)
-    # Convertir a float
     df_location["Latitude"] = df_location["Latitude"].astype(float)
     df_location["Longitude"] = df_location["Longitude"].astype(float)
 
     # Dataset para la tabla de actividad por país (nuevo)
     df_activity = pd.read_parquet("activity_iadb.parquet")
 
+    # NUEVO: Dataset outgoing con transactiondate_isodate, Sector y value_usd
+    df_outgoing = pd.read_parquet("outgoing_iadb.parquet")
+
     # Diccionario de DataFrames
     datasets = {
         "IADB_DASH_BDD": df_iadb,
         "LOCATION_IADB": df_location,
-        "ACTIVITY_IADB": df_activity
+        "ACTIVITY_IADB": df_activity,
+        "OUTGOING_IADB": df_outgoing  # Reemplazo del anterior disbursmentes
     }
     return datasets
 
@@ -287,47 +290,7 @@ def flujos_agregados():
     tipo_flujo = st.sidebar.selectbox("Selecciona el tipo de flujo:", flujo_opciones)
     mdb = st.sidebar.selectbox("Selecciona MDB:", mdb_opciones)
 
-    # Selección de país
-    if tipo_flujo == "Desembolsos":
-        df = disbursement_data.copy()
-    else:  # Aprobaciones
-        df = outgoing_commitment_data.copy()
-
-    paises_disponibles = sorted(df["recipientcountry_codename"].dropna().unique())
-    filtro_pais = st.sidebar.multiselect(
-        "Selecciona país(es):",
-        options=paises_disponibles,
-        default=paises_disponibles
-    )
-
-    # Filtrar el DataFrame por país
-    df_filtrado = df[df["recipientcountry_codename"].isin(filtro_pais)]
-
-    # Agrupar datos por año y calcular la suma de value_usd
-    resumen_anual = (
-        df_filtrado.groupby("year")["value_usd"]
-        .sum()
-        .reset_index()
-        .sort_values(by="year")
-    )
-
-    # Gráfico de barras
-    st.subheader(f"Evolución anual de {tipo_flujo.lower()} en {mdb}")
-    fig_bar = px.bar(
-        resumen_anual,
-        x="year",
-        y="value_usd",
-        labels={"year": "Año", "value_usd": "Valor en USD"},
-        title=f"Total de {tipo_flujo.lower()} por año",
-        text_auto=True,
-        height=500
-    )
-    fig_bar.update_layout(
-        xaxis=dict(title="Año"),
-        yaxis=dict(title="Valor en USD"),
-        margin=dict(l=20, r=20, t=60, b=20),
-    )
-    st.plotly_chart(fig_bar, use_container_width=True)
+    st.write("Aquí vendría la lógica para flujos agregados, según tus datasets.")
 
 # -----------------------------------------------------------------------------
 # PÁGINA 4: GEODATA (MODIFICADA)
@@ -342,42 +305,35 @@ def geodata():
         ("Mapa y Barras", "Proporción Sectores")
     )
 
-    # 2. Cargar el DataFrame de ubicación
-    data_location = DATASETS["LOCATION_IADB"].copy()
-
-    # Verificar la existencia de las columnas necesarias
-    if "Sector" not in data_location.columns or "recipientcountry_codename" not in data_location.columns:
-        st.error("Faltan columnas necesarias ('Sector' o 'recipientcountry_codename') en el dataset.")
-        return
-
-    # --- OPCIÓN A: MAPA Y BARRAS ---
+    # -- VISTA A: "Mapa y Barras" (usando LOCATION_IADB) -----------------------
     if vista_geo == "Mapa y Barras":
+        data_location = DATASETS["LOCATION_IADB"].copy()
 
-        # 2.1. Obtener lista de sectores únicos disponibles
+        if "Sector" not in data_location.columns or "recipientcountry_codename" not in data_location.columns:
+            st.error("Faltan columnas necesarias ('Sector' o 'recipientcountry_codename') en LOCATION_IADB.")
+            return
+
         sectores_disponibles = data_location['Sector'].dropna().unique()
 
-        # 2.2. Crear un filtro en la barra lateral para seleccionar un solo sector
         st.sidebar.header("Filtros (GeoData)")
         filtro_sector = st.sidebar.selectbox(
             "Selecciona un sector:",
             options=sectores_disponibles
         )
 
-        # 2.3. Filtrar el DataFrame en función del sector seleccionado
         data_filtrada_loc = data_location[data_location['Sector'] == filtro_sector]
 
-        # Si no hay datos tras filtrar, mostrar advertencia y salir
         if data_filtrada_loc.empty:
             st.warning("No se encontraron datos para el sector seleccionado.")
             return
 
-        # 2.4. Crear un mapa interactivo (scatter_mapbox)
+        # Mapa interactivo
         fig_map = px.scatter_mapbox(
             data_filtrada_loc,
             lat="Latitude",
             lon="Longitude",
             color="Sector",
-            color_discrete_map={filtro_sector: "#ef233c"},  # Mismo color para todos los puntos
+            color_discrete_map={filtro_sector: "#ef233c"},  # Mismo color
             size_max=15,
             hover_name="iatiidentifier",
             hover_data=["recipientcountry_codename", "Sector"],
@@ -396,23 +352,22 @@ def geodata():
             legend=dict(
                 orientation="h",
                 yanchor="top",
-                y=1.04,  # Ubicarla justo por debajo del título
+                y=1.04,
                 xanchor="right",
                 x=0.99
             )
         )
 
-        # 2.5. Crear la agregación (conteo de proyectos por país)
+        # Conteo de proyectos por país
         conteo_por_pais = (
             data_filtrada_loc
             .groupby("recipientcountry_codename")["iatiidentifier"]
             .nunique()
             .reset_index(name="Cantidad de Proyectos")
         )
-        # Ordenar de mayor a menor
         conteo_por_pais = conteo_por_pais.sort_values(by="Cantidad de Proyectos", ascending=True)
 
-        # 2.6. Crear gráfico de barras horizontal
+        # Gráfico de barras horizontal (sin fondo, sin títulos)
         fig_bars = go.Figure()
         fig_bars.add_trace(
             go.Bar(
@@ -426,69 +381,146 @@ def geodata():
         )
         fig_bars.update_layout(
             title="Cantidad de Proyectos por País",
-            xaxis_title="Cantidad de Proyectos",
-            yaxis_title="País",
+            xaxis_title=None,
+            yaxis_title=None,
             height=600,
             margin=dict(l=20, r=20, t=60, b=20),
             font_color="#FFFFFF",
-            plot_bgcolor="#1E1E1E",  # Fondo del gráfico en modo oscuro
-            paper_bgcolor="#1E1E1E"
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)"
         )
+        # Ocultar grid y ticks
+        fig_bars.update_xaxes(showgrid=False, zeroline=False, showticklabels=False)
+        fig_bars.update_yaxes(showgrid=False, zeroline=False, showticklabels=False)
 
-        # 2.7. Disponer el mapa y la gráfica de barras en columnas
         col_map, col_bar = st.columns([2, 2], gap="medium")
-
         with col_map:
             st.plotly_chart(fig_map, use_container_width=True)
-
         with col_bar:
             st.plotly_chart(fig_bars, use_container_width=True)
 
-    # --- OPCIÓN B: PROPORCIÓN SECTORES ---
+    # -- VISTA B: "Proporción Sectores" (usando OUTGOING_IADB) -----------
     elif vista_geo == "Proporción Sectores":
-        """
-        Aquí mostramos, por ejemplo, un gráfico de proporción (pie o donut)
-        de proyectos por sector en el dataset completo.
-        """
-        st.markdown("### Distribución de Proyectos por Sector")
-        
-        # Agrupamos por sector y contamos proyectos únicos
+        st.markdown("### Proporción de Proyectos por Sector (Waffle Chart)")
+
+        # 1. Cargar datos outgoing
+        data_outgoing = DATASETS["OUTGOING_IADB"].copy()
+
+        # 2. Convertir transactiondate_isodate a datetime y extraer año
+        data_outgoing["transactiondate_isodate"] = pd.to_datetime(
+            data_outgoing["transactiondate_isodate"], errors="coerce"
+        )
+        data_outgoing["year"] = data_outgoing["transactiondate_isodate"].dt.year
+
+        # 3. Crear filtro de rango de años en la barra lateral
+        min_year = int(data_outgoing["year"].min())
+        max_year = int(data_outgoing["year"].max())
+        st.sidebar.header("Filtros (Waffle Chart)")
+        rango_anios = st.sidebar.slider(
+            "Selecciona el rango de años:",
+            min_value=min_year,
+            max_value=max_year,
+            value=(min_year, max_year)
+        )
+
+        # 4. Filtrar data_outgoing según el rango de años
+        data_filtrada = data_outgoing[
+            (data_outgoing["year"] >= rango_anios[0]) &
+            (data_outgoing["year"] <= rango_anios[1])
+        ].copy()
+
+        # 5. Agrupar por Sector y sumar value_usd
         conteo_sectores = (
-            data_location
-            .groupby("Sector")["iatiidentifier"]
-            .nunique()
-            .reset_index(name="Cantidad")
-            .sort_values(by="Cantidad", ascending=False)
+            data_filtrada
+            .groupby("Sector")["value_usd"]
+            .sum()
+            .reset_index(name="TotalValueUSD")
+            .sort_values(by="TotalValueUSD", ascending=False)
         )
 
-        # Pie chart o donut
-        fig_pie = px.pie(
-            conteo_sectores,
-            names="Sector",
-            values="Cantidad",
-            hole=0.4,  # "Donut" si quieres
-            color="Sector",
-            title="Proporción de Proyectos por Sector",
-            color_discrete_sequence=px.colors.sequential.RdPu
+        # 6. Crear DataFrame para el waffle
+        def generate_waffle_data(
+            df, 
+            category_col="Sector", 
+            value_col="TotalValueUSD", 
+            total_squares=400,  # 20x20
+            grid_size=20
+        ):
+            """
+            Crea un grid de total_squares y asigna celdas a cada categoría 
+            según la proporción de 'value_col' en la suma total.
+            Retorna un DataFrame con columnas: [category, x, y].
+            """
+            total = df[value_col].sum()
+            # Calcula cuántas celdas le tocan a cada sector (round)
+            df["num_celdas"] = (
+                (df[value_col] / total * total_squares)
+                .round().astype(int)
+            )
+
+            waffle_list = []
+            for _, row in df.iterrows():
+                waffle_list += [row[category_col]] * row["num_celdas"]
+
+            # Ajuste si sobran o faltan celdas
+            if len(waffle_list) < total_squares:
+                waffle_list += ["Otros"] * (total_squares - len(waffle_list))
+            elif len(waffle_list) > total_squares:
+                waffle_list = waffle_list[:total_squares]
+
+            waffle_df = pd.DataFrame({"category": waffle_list})
+            waffle_df["index"] = waffle_df.index
+            waffle_df["x"] = waffle_df["index"] % grid_size
+            waffle_df["y"] = waffle_df["index"] // grid_size
+            return waffle_df
+
+        waffle_df = generate_waffle_data(conteo_sectores)
+
+        # 7. Graficar scatter con símbolos "square" para simular waffle
+        #    Paleta “seria y formal”: por ej. px.colors.sequential.Blues
+        color_sequence = px.colors.sequential.Blues
+
+        fig_waffle = px.scatter(
+            waffle_df,
+            x="x",
+            y="y",
+            color="category",
+            color_discrete_sequence=color_sequence,
+            width=650,
+            height=650
         )
-        fig_pie.update_layout(
-            height=600,
-            margin=dict(l=20, r=20, t=60, b=20),
-            font_color="#FFFFFF",
+
+        # Ajustes visuales para simular un waffle
+        fig_waffle.update_traces(
+            marker=dict(
+                size=22,            # tamaño de los cuadrados
+                symbol="square",    # forma cuadrada
+                line=dict(width=0)  # sin contorno
+            )
+        )
+        fig_waffle.update_layout(
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            margin=dict(l=20, r=20, t=20, b=20),
             plot_bgcolor="#1E1E1E",
-            paper_bgcolor="#1E1E1E"
+            paper_bgcolor="#1E1E1E",
+            font_color="#FFFFFF",
+            legend_title_text="Sector"
         )
+        # Invertir el eje y para que la fila 0 aparezca arriba
+        fig_waffle.update_yaxes(autorange="reversed")
 
-        st.plotly_chart(fig_pie, use_container_width=True)
+        # Mostrar waffle chart
+        st.plotly_chart(fig_waffle, use_container_width=True)
+
+        # 8. Opcional: mostrar tabla con valores reales
+        with st.expander("Ver datos por Sector"):
+            st.dataframe(conteo_sectores.reset_index(drop=True))
 
 # -----------------------------------------------------------------------------
 # PÁGINA 5: ANÁLISIS EXPLORATORIO (PYGWALKER)
 # -----------------------------------------------------------------------------
 def analisis_exploratorio():
-    """
-    Página de Análisis Exploratorio con PyGWalker y kernel_computation=True.
-    Se añade un selector en la barra lateral para elegir la BDD a analizar.
-    """
     st.markdown('<h1 class="title">Análisis Exploratorio</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora datos con PyGWalker (alto rendimiento).</p>', unsafe_allow_html=True)
 
