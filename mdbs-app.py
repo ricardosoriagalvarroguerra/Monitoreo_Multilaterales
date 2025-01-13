@@ -299,29 +299,27 @@ def geodata():
     for sector, color in zip(sectores, color_list):
         color_map[sector] = color
 
-    # 3. Filtro de la barra lateral para "Sector"
+    # 3. Filtro de la barra lateral para seleccionar uno o varios sectores
     st.sidebar.header("Filtros (GeoData)")
-    filtro_sector = st.sidebar.selectbox(
-        "Selecciona el sector a visualizar:",
-        options=["General"] + list(sectores),
-        index=0
+    filtro_sectores = st.sidebar.multiselect(
+        "Selecciona uno o varios sectores a visualizar:",
+        options=list(sectores),
+        default=[]
     )
 
-    # 4. Filtrar el dataframe si no es "General"
+    # 4. Filtrar el dataframe en función de los sectores seleccionados
     data_filtrada = data.copy()
-    if filtro_sector != "General":
-        data_filtrada = data_filtrada[data_filtrada['Sector'] == filtro_sector]
-
-    # Si no hay datos tras filtrar, mostrar advertencia
-    if data_filtrada.empty:
-        st.warning("No se encontraron datos para el sector seleccionado.")
+    if len(filtro_sectores) > 0:
+        data_filtrada = data_filtrada[data_filtrada['Sector'].isin(filtro_sectores)]
+    else:
+        st.warning("No se han seleccionado sectores, o no hay datos para la selección actual.")
         return
 
-    # 5. Generar la paleta de colores para Plotly a partir del color_map
-    #    (solo para los sectores que tengamos tras filtrar)
-    color_discrete_map = {}
-    for sec in data_filtrada["Sector"].unique():
-        color_discrete_map[sec] = color_map.get(sec, "#4682B4")  # color por defecto
+    # 5. Generar la paleta de colores para los sectores filtrados
+    color_discrete_map = {
+        sec: color_map.get(sec, "#4682B4") 
+        for sec in data_filtrada["Sector"].unique()
+    }
 
     # 6. Crear la figura con Plotly Express scatter_mapbox
     fig = px.scatter_mapbox(
@@ -342,7 +340,7 @@ def geodata():
         height=600  # altura del mapa
     )
 
-    # 7. Estilo “dark” de Mapbox y ajustes de márgenes
+    # 7. Estilo oscuro (o el que prefieras) y ajustes de márgenes
     fig.update_layout(
         mapbox_style="carto-darkmatter",
         margin={"r":0, "t":0, "l":0, "b":0}
