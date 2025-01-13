@@ -79,18 +79,18 @@ def load_dataframes():
     df_location["Latitude"] = df_location["Latitude"].astype(float)
     df_location["Longitude"] = df_location["Longitude"].astype(float)
 
-    # Dataset para la tabla de actividad por país (nuevo)
+    # Dataset para la tabla de actividad por país
     df_activity = pd.read_parquet("activity_iadb.parquet")
 
     # NUEVO: Dataset outgoing con transactiondate_isodate, Sector y value_usd
-    df_outgoing = pd.read_parquet("outgoing_iadb.parquet")
+    df_outgoing = pd.read_parquet("outgoing_commitment_iadb.parquet")
 
     # Diccionario de DataFrames
     datasets = {
         "IADB_DASH_BDD": df_iadb,
         "LOCATION_IADB": df_location,
         "ACTIVITY_IADB": df_activity,
-        "OUTGOING_IADB": df_outgoing  # Reemplazo del anterior disbursmentes
+        "OUTGOING_IADB": df_outgoing
     }
     return datasets
 
@@ -333,7 +333,7 @@ def geodata():
             lat="Latitude",
             lon="Longitude",
             color="Sector",
-            color_discrete_map={filtro_sector: "#ef233c"},  # Mismo color
+            color_discrete_map={filtro_sector: "#ef233c"},
             size_max=15,
             hover_name="iatiidentifier",
             hover_data=["recipientcountry_codename", "Sector"],
@@ -477,8 +477,7 @@ def geodata():
         waffle_df = generate_waffle_data(conteo_sectores)
 
         # 7. Graficar scatter con símbolos "square" para simular waffle
-        #    Paleta “seria y formal”: por ej. px.colors.sequential.Blues
-        color_sequence = px.colors.sequential.Blues
+        color_sequence = px.colors.sequential.Blues  # Paleta “seria y formal”
 
         fig_waffle = px.scatter(
             waffle_df,
