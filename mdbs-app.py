@@ -277,84 +277,120 @@ def flujos_agregados():
     """
     Página principal de Flujos Agregados con subpáginas:
     - Aprobaciones
-    - (Futuras subpáginas: Desembolsos, Instrumentos)
+    - Desembolsos
+    - Instrumentos
     """
-
-    # Título de la página
     st.markdown('<h1 class="title">Flujos Agregados</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Analiza aprobaciones y desembolsos anuales.</p>', unsafe_allow_html=True)
 
-    # Selector de subpágina
     subpagina = st.sidebar.radio(
         "Selecciona la subpágina:",
         ("Aprobaciones", "Desembolsos", "Instrumentos")
     )
 
-    # Cargar dataset correspondiente
+    # Cargamos el dataset correspondiente
     data = DATASETS["OUTGOING_IADB"].copy()
 
-    # Subpágina: Aprobaciones
+    # -------------------------------------------------------------------------
+    # SUBPÁGINA: APROBACIONES
+    # -------------------------------------------------------------------------
     if subpagina == "Aprobaciones":
         st.markdown("## Aprobaciones")
-        st.markdown("### Análisis de aprobaciones por país")
+        st.markdown("### Montos globales y por región")
 
-        # Filtro por país (recipientcountry_codename)
-        st.sidebar.header("Filtros (Aprobaciones)")
-        paises_disponibles = sorted(data["recipientcountry_codename"].dropna().unique())
-        filtro_pais = st.sidebar.multiselect(
-            "Selecciona uno o varios países:",
-            options=paises_disponibles,
-            default=paises_disponibles[:5]  # Selección predeterminada de los primeros 5
-        )
+        # Convertir la columna de fecha a tipo datetime y extraer el año
+        data["year"] = pd.to_datetime(data["transactiondate_isodate"], errors="coerce").dt.year
 
-        # Filtrar dataset según país seleccionado
-        data_filtrada = data[data["recipientcountry_codename"].isin(filtro_pais)]
-
-        if data_filtrada.empty:
-            st.warning("No se encontraron datos para los países seleccionados.")
-            return
-
-        # Resumen por año y país
-        data_filtrada["year"] = pd.to_datetime(data_filtrada["transactiondate_isodate"], errors="coerce").dt.year
-        resumen_aprobaciones = (
-            data_filtrada
-            .groupby(["year", "recipientcountry_codename"])["value_usd"]
+        # ---------------------------------------------------------------------
+        # (A) Gráfico general de barras por año (sin filtros)
+        # ---------------------------------------------------------------------
+        resumen_global = (
+            data.groupby("year")["value_usd"]
             .sum()
             .reset_index()
-            .rename(columns={"value_usd": "Monto (USD)", "year": "Año", "recipientcountry_codename": "País"})
+            .rename(columns={"year": "Año", "value_usd": "Monto (USD)"})
         )
 
-        # Gráfico: Serie de tiempo por país
-        fig_aprobaciones = px.line(
-            resumen_aprobaciones,
+        fig_global = px.bar(
+            resumen_global,
             x="Año",
             y="Monto (USD)",
-            color="País",
-            title="Evolución de las Aprobaciones por País",
-            markers=True
+            title="Montos por Año (Global)"
         )
-        fig_aprobaciones.update_layout(
-            xaxis_title="Año",
-            yaxis_title="Monto (USD)",
-            legend_title="País",
-            font_color="#FFFFFF",
-            plot_bgcolor="#1E1E1E",
-            paper_bgcolor="#1E1E1E"
+        # Remover fondo del gráfico
+        fig_global.update_layout(
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(showgrid=False),
+            yaxis=dict(showgrid=False),
+            font_color="#FFFFFF"
+        )
+        st.plotly_chart(fig_global, use_container_width=True)
+
+        # ---------------------------------------------------------------------
+        # (B) Filtro por Región y, luego, por País
+        # ---------------------------------------------------------------------
+        st.sidebar.header("Filtros (Aprobaciones)")
+
+        # 1. Filtro por región
+        regiones_disponibles = sorted(data["region"].dropna().unique())
+        region_seleccionada = st.sidebar.selectbox(
+            "Selecciona la región:",
+            options=["Todas"] + regiones_disponibles,
+            index=0
         )
 
-        # Mostrar el gráfico
-        st.plotly_chart(fig_aprobaciones, use_container_width=True)
+        # Copiamos el dataset original para ir filtrando según selección
+        data_filtrada = data.copy()
 
-        # Tabla de datos
-        with st.expander("Ver tabla de datos"):
-            st.dataframe(resumen_aprobaciones)
+        if region_seleccionada != "Todas":
+            data_filtrada = data_filtrada[data_filtrada["region"] == region_seleccionada]
 
-    # Subpágina: Desembolsos (por implementar)
+            # 2. Activar filtro por país solo si se seleccionó una región
+            paises_region = sorted(data_filtrada["recipientcountry_codename"].dropna().unique())
+            pais_seleccionado = st.sidebar.selectbox(
+                "Selecciona el país:",
+                options=["Todos"] + paises_region,
+                index=0
+            )
+            if pais_seleccionado != "Todos":
+                data_filtrada = data_filtrada[data_filtrada["recipientcountry_codename"] == pais_seleccionado]
+
+        # ---------------------------------------------------------------------
+        # (C) Gráfico con los filtros aplicados
+        # ---------------------------------------------------------------------
+        if data_filtrada.empty:
+            st.warning("No se encontraron datos con los filtros aplicados.")
+        else:
+            resumen_filtrado = (
+                data_filtrada.groupby("year")["value_usd"]
+                .sum()
+                .reset_index()
+                .rename(columns={"year": "Año", "value_usd": "Monto (USD)"})
+            )
+            fig_filtrado = px.bar(
+                resumen_filtrado,
+                x="Año",
+                y="Monto (USD)",
+                title="Montos por Año (Filtrado)"
+            )
+            # Remover fondo del gráfico
+            fig_filtrado.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=False),
+                font_color="#FFFFFF"
+            )
+            st.plotly_chart(fig_filtrado, use_container_width=True)
+
+    # -------------------------------------------------------------------------
+    # SUBPÁGINAS: DESEMBOLSOS / INSTRUMENTOS (EN DESARROLLO)
+    # -------------------------------------------------------------------------
     elif subpagina == "Desembolsos":
         st.markdown("## Desembolsos")
         st.markdown("### Esta sección está en desarrollo. Volveremos pronto.")
 
-    # Subpágina: Instrumentos (por implementar)
     elif subpagina == "Instrumentos":
         st.markdown("## Instrumentos")
         st.markdown("### Esta sección está en desarrollo. Volveremos pronto.")
