@@ -283,9 +283,22 @@ def flujos_agregados():
 # PÁGINA 4: GEODATA
 # -----------------------------------------------------------------------------
 def geodata():
+    """
+    Página de GeoData en la app Streamlit.
+    Incluye 2 vistas:
+      A) "Mapa y Barras"
+      B) "Proporción Sectores" (Waffle Chart con top 5 por país)
+    """
+    import random
+    import pandas as pd
+    import plotly.express as px
+    import plotly.graph_objects as go
+    import streamlit as st
+
     st.markdown('<h1 class="title">GeoData</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora datos geoespaciales de los proyectos.</p>', unsafe_allow_html=True)
 
+    # Selector de vista en la barra lateral
     vista_geo = st.sidebar.radio(
         "Selecciona la vista de GeoData:",
         ("Mapa y Barras", "Proporción Sectores")
@@ -295,8 +308,10 @@ def geodata():
     # VISTA A: "Mapa y Barras"
     # -------------------------------------------------------------------------
     if vista_geo == "Mapa y Barras":
+        # Cargamos el dataframe
         data_location = DATASETS["LOCATION_IADB"].copy()
 
+        # Validar que existan las columnas necesarias
         if "Sector" not in data_location.columns or "recipientcountry_codename" not in data_location.columns:
             st.error("Faltan columnas necesarias ('Sector' o 'recipientcountry_codename') en LOCATION_IADB.")
             return
@@ -308,19 +323,20 @@ def geodata():
             options=sectores_disponibles
         )
 
+        # Filtrar por sector seleccionado
         data_filtrada_loc = data_location[data_location['Sector'] == filtro_sector]
 
         if data_filtrada_loc.empty:
             st.warning("No se encontraron datos para el sector seleccionado.")
             return
 
-        # MAPA
+        # ---------------------- MAPA (Scatter Mapbox) -------------------------
         fig_map = px.scatter_mapbox(
             data_filtrada_loc,
             lat="Latitude",
             lon="Longitude",
             color="Sector",
-            color_discrete_map={filtro_sector: "#ef233c"},
+            color_discrete_map={filtro_sector: "#ef233c"},  # color personalizado
             size_max=15,
             hover_name="iatiidentifier",
             hover_data=["recipientcountry_codename", "Sector"],
@@ -344,7 +360,7 @@ def geodata():
             )
         )
 
-        # GRÁFICO DE BARRAS (horizontal)
+        # ------------------ GRÁFICO DE BARRAS (País vs cantidad) --------------
         conteo_por_pais = (
             data_filtrada_loc
             .groupby("recipientcountry_codename")["iatiidentifier"]
@@ -359,7 +375,7 @@ def geodata():
                 x=conteo_por_pais["Cantidad de Proyectos"],
                 y=conteo_por_pais["recipientcountry_codename"],
                 orientation='h',
-                marker_color="#ef233c",
+                marker_color="#ef233c",  # mismo color del mapa
                 text=conteo_por_pais["Cantidad de Proyectos"],
                 textposition="outside"
             )
@@ -377,6 +393,7 @@ def geodata():
         fig_bars.update_xaxes(showgrid=False, zeroline=False)
         fig_bars.update_yaxes(showgrid=False, zeroline=False)
 
+        # Mostrar en dos columnas
         col_map, col_bar = st.columns([2, 2], gap="medium")
         with col_map:
             st.plotly_chart(fig_map, use_container_width=True)
@@ -384,7 +401,7 @@ def geodata():
             st.plotly_chart(fig_bars, use_container_width=True)
 
     # -------------------------------------------------------------------------
-    # VISTA B: "Proporción Sectores" (Waffle Chart)
+    # VISTA B: "Proporción Sectores" (Waffle Chart Top 5)
     # -------------------------------------------------------------------------
     elif vista_geo == "Proporción Sectores":
         st.markdown("### Proporción de Sectores (Waffle Chart)")
@@ -398,8 +415,18 @@ def geodata():
         )
         data_outgoing["year"] = data_outgoing["transactiondate_isodate"].dt.year
 
-        # 3. Filtros
+        # 3. Filtros en la barra lateral
         st.sidebar.header("Filtros (Proporción Sectores)")
+
+        # -- Filtro por país (recipientcountry_codename) --
+        countries_disponibles = sorted(data_outgoing["recipientcountry_codename"].dropna().unique())
+        filtro_country = st.sidebar.selectbox(
+            "Selecciona un país:",
+            options=countries_disponibles,
+            index=0
+        )
+
+        # -- Filtro por rango de años --
         min_year = int(data_outgoing["year"].min())
         max_year = int(data_outgoing["year"].max())
         rango_anios = st.sidebar.slider(
@@ -409,84 +436,80 @@ def geodata():
             value=(min_year, max_year)
         )
 
-        # Selección múltiple de sectores
-        sectores_disponibles_waffle = sorted(data_outgoing["Sector"].dropna().unique())
-        filtro_sectores = st.sidebar.multiselect(
-            "Selecciona uno o varios sectores:",
-            options=sectores_disponibles_waffle,
-            default=[]
-        )
-
-        # 4. Filtrar por rango de años
+        # 4. Filtrar DataFrame según país y rango de años
         data_filtrada = data_outgoing[
+            (data_outgoing["recipientcountry_codename"] == filtro_country) &
             (data_outgoing["year"] >= rango_anios[0]) &
             (data_outgoing["year"] <= rango_anios[1])
         ].copy()
 
         if data_filtrada.empty:
-            st.warning("No se encontraron datos en ese rango de años.")
+            st.warning("No se encontraron datos para el país y rango de años seleccionados.")
             return
 
-        # 5. Total y cálculo de montos
-        total_value = data_filtrada["value_usd"].sum()
+        # 5. Agrupar por Sector y calcular el valor_usd total
+        df_agrupado = (
+            data_filtrada
+            .groupby("Sector", dropna=True)["value_usd"]
+            .sum()
+            .reset_index()
+        )
+        # Ordenamos de mayor a menor
+        df_agrupado = df_agrupado.sort_values(by="value_usd", ascending=False)
 
-        # Construimos un DF con la(s) categoría(s) seleccionada(s) + "Otros"
-        # El primer sector => color #9d0208
-        # "Otros" => #ffffff
-        # El resto => colores aleatorios en torno a 9d0208
-        def random_color():
-            """
-            Genera un color pastel aleatorio que combine razonablemente
-            con #9d0208 (simple heurística).
-            """
-            import colorsys
-            # Generar un color HSL aleatorio y convertirlo a RGB
-            h = random.random()  # 0-1
-            s = 0.5 + random.random() * 0.4  # 0.5-0.9
-            l = 0.4 + random.random() * 0.2  # 0.4-0.6
-            r, g, b = colorsys.hls_to_rgb(h, l, s)
-            # Convertir a #RRGGBB
-            return f"#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}"
+        # 6. Tomar Top 5 sectores, el resto se suma como "Otros"
+        top_5 = df_agrupado.head(5).copy()
+        otros = df_agrupado.iloc[5:].copy()
+        sum_otros = otros["value_usd"].sum()
 
-        # Armar la lista de [Category, Amount]
+        # Construimos la lista final (5 + 1 "Otros" si corresponde)
         sector_rows = []
-        selected_sum = 0.0
-        color_map = {}  # sector -> color
-
-        for i, sector_sel in enumerate(filtro_sectores):
-            sec_val = data_filtrada.loc[data_filtrada["Sector"] == sector_sel, "value_usd"].sum()
-            selected_sum += sec_val
-            if i == 0:
-                # Primer sector => #9d0208
-                color_map[sector_sel] = "#9d0208"
-            else:
-                color_map[sector_sel] = random_color()  # Aleatorio
-
-            sector_rows.append([sector_sel, sec_val])
-
-        otros_val = total_value - selected_sum
-        if otros_val < 0:
-            otros_val = 0.0
-        # Agregamos "Otros" => #ffffff
-        sector_rows.append(["Otros", otros_val])
-        color_map["Otros"] = "#ffffff"
+        for _, row in top_5.iterrows():
+            sector_rows.append([row["Sector"], row["value_usd"]])
+        if sum_otros > 0:
+            sector_rows.append(["Otros", sum_otros])
 
         df_sectores = pd.DataFrame(sector_rows, columns=["Sector", "Amount"])
+        total_value = df_sectores["Amount"].sum()
 
-        # 6. Función para generar waffle
+        # 7. Definir colores para top 5 y "Otros"
+        #    (Los colores solicitados: f6f7eb, e94f37, 3f88c5, 44bba4, #3C6383)
+        #    "Otros": color neutro
+        colores_top_5 = [
+            "#f6f7eb",  # 1
+            "#e94f37",  # 2
+            "#3f88c5",  # 3
+            "#44bba4",  # 4
+            "#3C6383",  # 5
+        ]
+        color_map = {}
+        # Asignamos colores en orden a los 5 sectores con mayor monto
+        for i, row in enumerate(top_5.itertuples()):
+            if i < len(colores_top_5):
+                color_map[row.Sector] = colores_top_5[i]
+
+        # Color neutro para "Otros"
+        color_map["Otros"] = "#bcb8b1"
+
+        # 8. Función para generar el dataframe de celdas (Waffle)
         def generate_waffle_data(df, total_squares=100, grid_size=10):
             """
-            Toma un DataFrame con columnas ["Sector", "Amount"] y genera un waffle de total_squares celdas.
+            Toma un DataFrame con columnas ['Sector', 'Amount'] y genera un
+            waffle de total_squares celdas en una cuadrícula grid_size x grid_size.
             """
             total_amount = df["Amount"].sum()
-            # calcular cuántas celdas por sector
-            df["num_celdas"] = (df["Amount"] / total_amount * total_squares).round().astype(int)
+            if total_amount == 0:
+                df["num_celdas"] = 0
+            else:
+                df["num_celdas"] = (
+                    (df["Amount"] / total_amount) * total_squares
+                ).round().astype(int)
 
             waffle_list = []
-            for _, row in df.iterrows():
-                waffle_list += [row["Sector"]] * row["num_celdas"]
+            for _, fila in df.iterrows():
+                waffle_list += [fila["Sector"]] * fila["num_celdas"]
 
-            # Ajustes si sobra/falta
+            # Ajustar si sobra/falta
             if len(waffle_list) < total_squares:
                 waffle_list += ["Otros"] * (total_squares - len(waffle_list))
             elif len(waffle_list) > total_squares:
@@ -500,16 +523,16 @@ def geodata():
 
         waffle_df = generate_waffle_data(df_sectores, total_squares=100, grid_size=10)
 
-        # 7. Construir color_discrete_map para Plotly
-        cats_uniq = waffle_df["category"].unique().tolist()
+        # 9. Crear el color_discrete_map para Plotly
+        categorias_uniq = waffle_df["category"].unique().tolist()
         discrete_map = {}
-        for cat in cats_uniq:
+        for cat in categorias_uniq:
             if cat in color_map:
                 discrete_map[cat] = color_map[cat]
             else:
-                discrete_map[cat] = "#ffffff"  # fallback
+                discrete_map[cat] = "#bcb8b1"  # fallback neutro
 
-        # 8. Crear scatter (Waffle)
+        # 10. Construir el scatter (Waffle Chart)
         fig_waffle = px.scatter(
             waffle_df,
             x="x",
@@ -537,24 +560,24 @@ def geodata():
             font_color="#FFFFFF",
             legend_title_text=""
         )
+        # Invertir eje Y para que el origen esté arriba
         fig_waffle.update_yaxes(autorange="reversed")
 
-        # 9. Mostrar "value box" arriba del waffle chart (porcentajes)
-        st.markdown("#### Porcentaje de Sectores Seleccionados")
+        # 11. Mostrar porcentajes (Top 5 + Otros)
+        st.markdown("#### Porcentaje de Sectores (Top 5 + Otros)")
         if total_value > 0:
             for sec, amt in sector_rows:
-                if sec == "Otros":
-                    continue
-                pct_val = 0.0 if total_value == 0 else (amt / total_value * 100)
+                pct_val = 100.0 * amt / total_value
                 st.write(f"**{sec}**: {pct_val:,.2f}%")
         else:
             st.warning("El total en 'value_usd' es 0. No se pueden calcular porcentajes.")
 
+        # 12. Renderizar el chart y la tabla
         st.plotly_chart(fig_waffle, use_container_width=True)
 
-        # Muestra la tabla final
-        with st.expander("Ver datos de cada categoría"):
+        with st.expander("Ver datos agregados por sector"):
             st.dataframe(df_sectores)
+
 
 # -----------------------------------------------------------------------------
 # PÁGINA 5: ANÁLISIS EXPLORATORIO (PYGWALKER)
