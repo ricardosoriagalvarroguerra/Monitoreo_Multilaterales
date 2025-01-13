@@ -335,8 +335,14 @@ def flujos_agregados():
 def geodata():
     st.markdown('<h1 class="title">GeoData</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora datos geoespaciales de los proyectos.</p>', unsafe_allow_html=True)
-    
-    # 1. Cargar el DataFrame de ubicación
+
+    # 1. Selector de subpágina en la barra lateral
+    vista_geo = st.sidebar.radio(
+        "Selecciona la vista de GeoData:",
+        ("Mapa y Barras", "Proporción Sectores")
+    )
+
+    # 2. Cargar el DataFrame de ubicación
     data_location = DATASETS["LOCATION_IADB"].copy()
 
     # Verificar la existencia de las columnas necesarias
@@ -344,79 +350,136 @@ def geodata():
         st.error("Faltan columnas necesarias ('Sector' o 'recipientcountry_codename') en el dataset.")
         return
 
-    # 2. Obtener la lista de sectores únicos disponibles
-    sectores_disponibles = data_location['Sector'].dropna().unique()
-    
-    # 3. Crear un filtro en la barra lateral para seleccionar un solo sector
-    st.sidebar.header("Filtros (GeoData)")
-    filtro_sector = st.sidebar.selectbox(
-        "Selecciona un sector:",
-        options=sectores_disponibles
-    )
+    # --- OPCIÓN A: MAPA Y BARRAS ---
+    if vista_geo == "Mapa y Barras":
 
-    # 4. Filtrar el DataFrame en función del sector seleccionado
-    data_filtrada_loc = data_location[data_location['Sector'] == filtro_sector]
-    
-    # Si no hay datos tras filtrar, mostrar advertencia y salir
-    if data_filtrada_loc.empty:
-        st.warning("No se encontraron datos para el sector seleccionado.")
-        return
+        # 2.1. Obtener lista de sectores únicos disponibles
+        sectores_disponibles = data_location['Sector'].dropna().unique()
 
-    # 5. Crear un mapa interactivo con Plotly Express
-    #    - Se fuerza el color para el sector al valor "#ef233c"
-    fig = px.scatter_mapbox(
-        data_filtrada_loc,
-        lat="Latitude",
-        lon="Longitude",
-        color="Sector",
-        color_discrete_map={filtro_sector: "#ef233c"},  # Puntos en "#ef233c"
-        size_max=15,
-        hover_name="iatiidentifier",
-        hover_data=["recipientcountry_codename", "Sector"],
-        zoom=3,
-        center={
-            "lat": data_filtrada_loc["Latitude"].mean(),
-            "lon": data_filtrada_loc["Longitude"].mean()
-        },
-        height=600,
-        mapbox_style="carto-darkmatter",
-        title=f"Proyectos en el Sector: {filtro_sector}"
-    )
-
-    # Ajustar la posición de la leyenda para no chocar con el título/subtítulo
-    fig.update_layout(
-        margin={"r":20, "t":80, "l":20, "b":20},
-        legend=dict(
-            orientation="h",
-            yanchor="top",
-            y=1.04,      # Ubicarla justo por debajo del título
-            xanchor="right",
-            x=0.99
+        # 2.2. Crear un filtro en la barra lateral para seleccionar un solo sector
+        st.sidebar.header("Filtros (GeoData)")
+        filtro_sector = st.sidebar.selectbox(
+            "Selecciona un sector:",
+            options=sectores_disponibles
         )
-    )
 
-    # 6. Crear una tabla con la cantidad de proyectos por país
-    conteo_por_pais = (
-        data_filtrada_loc
-        .groupby("recipientcountry_codename")["iatiidentifier"]
-        .nunique()
-        .reset_index(name="Cantidad de Proyectos")
-    )
-    # Ordenar
-    conteo_por_pais = conteo_por_pais.sort_values(by="Cantidad de Proyectos", ascending=False)
-    # Quitar índice original
-    conteo_por_pais = conteo_por_pais.reset_index(drop=True)
+        # 2.3. Filtrar el DataFrame en función del sector seleccionado
+        data_filtrada_loc = data_location[data_location['Sector'] == filtro_sector]
 
-    # Disponer mapa y tabla en columnas lado a lado (mismo ancho)
-    col_map, col_table = st.columns([2, 2], gap="medium")
+        # Si no hay datos tras filtrar, mostrar advertencia y salir
+        if data_filtrada_loc.empty:
+            st.warning("No se encontraron datos para el sector seleccionado.")
+            return
 
-    with col_map:
-        st.plotly_chart(fig, use_container_width=True)
+        # 2.4. Crear un mapa interactivo (scatter_mapbox)
+        fig_map = px.scatter_mapbox(
+            data_filtrada_loc,
+            lat="Latitude",
+            lon="Longitude",
+            color="Sector",
+            color_discrete_map={filtro_sector: "#ef233c"},  # Mismo color para todos los puntos
+            size_max=15,
+            hover_name="iatiidentifier",
+            hover_data=["recipientcountry_codename", "Sector"],
+            zoom=3,
+            center={
+                "lat": data_filtrada_loc["Latitude"].mean(),
+                "lon": data_filtrada_loc["Longitude"].mean()
+            },
+            height=600,
+            mapbox_style="carto-darkmatter",
+            title=f"Proyectos en el Sector: {filtro_sector}"
+        )
 
-    with col_table:
-        st.subheader("Cantidad de Proyectos por País")
-        conteo_por_pais_styled = conteo_por_pais.style.hide(axis="index")
-        st.dataframe(conteo_por_pais_styled, use_container_width=True, height=800)
+        fig_map.update_layout(
+            margin={"r": 20, "t": 80, "l": 20, "b": 20},
+            legend=dict(
+                orientation="h",
+                yanchor="top",
+                y=1.04,  # Ubicarla justo por debajo del título
+                xanchor="right",
+                x=0.99
+            )
+        )
+
+        # 2.5. Crear la agregación (conteo de proyectos por país)
+        conteo_por_pais = (
+            data_filtrada_loc
+            .groupby("recipientcountry_codename")["iatiidentifier"]
+            .nunique()
+            .reset_index(name="Cantidad de Proyectos")
+        )
+        # Ordenar de mayor a menor
+        conteo_por_pais = conteo_por_pais.sort_values(by="Cantidad de Proyectos", ascending=True)
+
+        # 2.6. Crear gráfico de barras horizontal
+        fig_bars = go.Figure()
+        fig_bars.add_trace(
+            go.Bar(
+                x=conteo_por_pais["Cantidad de Proyectos"],
+                y=conteo_por_pais["recipientcountry_codename"],
+                orientation='h',
+                marker_color="#ef233c",
+                text=conteo_por_pais["Cantidad de Proyectos"],
+                textposition="outside"
+            )
+        )
+        fig_bars.update_layout(
+            title="Cantidad de Proyectos por País",
+            xaxis_title="Cantidad de Proyectos",
+            yaxis_title="País",
+            height=600,
+            margin=dict(l=20, r=20, t=60, b=20),
+            font_color="#FFFFFF",
+            plot_bgcolor="#1E1E1E",  # Fondo del gráfico en modo oscuro
+            paper_bgcolor="#1E1E1E"
+        )
+
+        # 2.7. Disponer el mapa y la gráfica de barras en columnas
+        col_map, col_bar = st.columns([2, 2], gap="medium")
+
+        with col_map:
+            st.plotly_chart(fig_map, use_container_width=True)
+
+        with col_bar:
+            st.plotly_chart(fig_bars, use_container_width=True)
+
+    # --- OPCIÓN B: PROPORCIÓN SECTORES ---
+    elif vista_geo == "Proporción Sectores":
+        """
+        Aquí mostramos, por ejemplo, un gráfico de proporción (pie o donut)
+        de proyectos por sector en el dataset completo.
+        """
+        st.markdown("### Distribución de Proyectos por Sector")
+        
+        # Agrupamos por sector y contamos proyectos únicos
+        conteo_sectores = (
+            data_location
+            .groupby("Sector")["iatiidentifier"]
+            .nunique()
+            .reset_index(name="Cantidad")
+            .sort_values(by="Cantidad", ascending=False)
+        )
+
+        # Pie chart o donut
+        fig_pie = px.pie(
+            conteo_sectores,
+            names="Sector",
+            values="Cantidad",
+            hole=0.4,  # "Donut" si quieres
+            color="Sector",
+            title="Proporción de Proyectos por Sector",
+            color_discrete_sequence=px.colors.sequential.RdPu
+        )
+        fig_pie.update_layout(
+            height=600,
+            margin=dict(l=20, r=20, t=60, b=20),
+            font_color="#FFFFFF",
+            plot_bgcolor="#1E1E1E",
+            paper_bgcolor="#1E1E1E"
+        )
+
+        st.plotly_chart(fig_pie, use_container_width=True)
 
 # -----------------------------------------------------------------------------
 # PÁGINA 5: ANÁLISIS EXPLORATORIO (PYGWALKER)
