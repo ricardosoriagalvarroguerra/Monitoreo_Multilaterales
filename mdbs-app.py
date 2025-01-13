@@ -1,13 +1,14 @@
 import streamlit as st
 import pandas as pd
-import folium
-from folium.plugins import MarkerCluster
-import matplotlib.colors as mcolors
-from streamlit_folium import st_folium
 import plotly.express as px
 import plotly.graph_objects as go
 from pygwalker.api.streamlit import StreamlitRenderer
 import pygwalker as pyg
+
+import matplotlib.colors as mcolors  # Para usar TABLEAU_COLORS u otras paletas
+import folium
+from streamlit_folium import st_folium
+from folium.plugins import MarkerCluster
 
 # -----------------------------------------------------------------------------
 # CONFIGURACIÓN DE PÁGINA Y CSS PERSONALIZADO (MODO OSCURO)
@@ -63,18 +64,26 @@ st.markdown(
 )
 
 # -----------------------------------------------------------------------------
-# 1. CARGA DE DATOS (CACHÉ) - PUEDES AGREGAR MÁS Datasets EN EL DICCIONARIO
+# 1. CARGA DE DATOS (CACHÉ)
 # -----------------------------------------------------------------------------
 @st.cache_data
 def load_dataframes():
     """Lee y devuelve los DataFrames usados en la aplicación."""
+    # Dataset principal
     df_iadb = pd.read_parquet("IADB_DASH_BDD.parquet")
-    
-    # Ejemplo: Si tienes otros datasets, agrégalos al diccionario
+
+    # Dataset con lat/long en la columna 'point_pos'
+    df_location = pd.read_parquet("location_iadb.parquet")
+    # Separar 'point_pos' (ej: "40.7128,-74.0060") en columnas 'Latitude' y 'Longitude'
+    df_location[["Latitude", "Longitude"]] = df_location["point_pos"].str.split(",", expand=True)
+    # Convertir a float
+    df_location["Latitude"] = df_location["Latitude"].astype(float)
+    df_location["Longitude"] = df_location["Longitude"].astype(float)
+
+    # Diccionario de DataFrames
     datasets = {
         "IADB_DASH_BDD": df_iadb,
-        # "Otro_Dataset": pd.read_csv("otra_ruta.csv"),
-        # ...
+        "LOCATION_IADB": df_location
     }
     return datasets
 
@@ -93,9 +102,11 @@ def get_pyg_renderer_by_name(dataset_name: str) -> StreamlitRenderer:
     renderer = StreamlitRenderer(
         df,
         kernel_computation=True  # Acelera cálculos en grandes datasets
-        # Si quieres, puedes usar spec_io_mode="rw", spec="./gw_config.json", etc.
+        # Puedes usar parámetros adicionales si lo deseas, por ejemplo:
+        # spec_io_mode="rw", spec="./gw_config.json", etc.
     )
     return renderer
+
 
 # -----------------------------------------------------------------------------
 # PÁGINA 1: MONITOREO MULTILATERALES
@@ -164,6 +175,7 @@ def cooperaciones_tecnicas():
         "Uruguay": "#1c5d99",
     }
 
+    # Gráfico de línea
     if "General" not in filtro_pais:
         fig_line = px.line(
             data_tc,
@@ -277,9 +289,19 @@ def geodata():
     st.markdown('<h1 class="title">GeoData</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora datos geoespaciales de los proyectos.</p>', unsafe_allow_html=True)
     
-    data = DATASETS["IADB_DASH_BDD"].copy()
+    # Aquí usamos el dataset con la columna 'point_pos'
+    data = DATASETS["LOCATION_IADB"].copy()
+
+    # Asegúrate de que la columna 'Sector' exista en este dataset. 
+    # Si no existe, adapta o elimina la lógica que la usa.
     sectores = data['Sector'].dropna().unique()
-    color_map = {sector: color for sector, color in zip(sectores, mcolors.TABLEAU_COLORS)}
+    # Usaremos TABLEAU_COLORS para asignar colores a cada sector
+    color_list = list(mcolors.TABLEAU_COLORS.values())
+    color_map = {}
+    # Asignar color a cada sector (si hay más sectores que colores, 
+    # podrías hacer algo más sofisticado)
+    for sector, color in zip(sectores, color_list):
+        color_map[sector] = color
 
     st.sidebar.header("Filtros (GeoData)")
     filtro_sector = st.sidebar.selectbox(
@@ -293,6 +315,12 @@ def geodata():
     if filtro_sector != "General":
         data_filtrada = data_filtrada[data_filtrada['Sector'] == filtro_sector]
 
+    # Crear mapa (usando folium)
+    if len(data_filtrada) == 0:
+        st.warning("No se encontraron datos para el sector seleccionado.")
+        return
+
+    # Centrar el mapa en la media de las coordenadas
     m = folium.Map(
         location=[data_filtrada['Latitude'].mean(), data_filtrada['Longitude'].mean()],
         zoom_start=3,
@@ -301,24 +329,26 @@ def geodata():
     marker_cluster = MarkerCluster().add_to(m)
     
     for _, row in data_filtrada.iterrows():
+        # Ajusta estas claves según las columnas que tengas
         popup_info = f"""
-        <strong>ID:</strong> {row['iatiidentifier']}<br>
-        <strong>Country:</strong> {row['recipientcountry_codename']}<br>
-        <strong>Sector:</strong> {row['Sector']}
+        <strong>ID:</strong> {row.get('iatiidentifier', 'N/A')}<br>
+        <strong>Country:</strong> {row.get('recipientcountry_codename', 'N/A')}<br>
+        <strong>Sector:</strong> {row.get('Sector', 'N/A')}
         """
         folium.CircleMarker(
             location=(row['Latitude'], row['Longitude']),
             radius=7,
             popup=folium.Popup(popup_info, max_width=300),
-            color=color_map.get(row['Sector'], 'blue'),
+            color=color_map.get(row['Sector'], '#3388ff'),
             fill=True,
             fill_opacity=0.6
         ).add_to(marker_cluster)
 
     st_folium(m, width=800, height=600)
 
+
 # -----------------------------------------------------------------------------
-# PÁGINA 5: ANÁLISIS EXPLORATORIO (PYGWALKER) CON SELECTOR DE DATASET
+# PÁGINA 5: ANÁLISIS EXPLORATORIO (PYGWALKER)
 # -----------------------------------------------------------------------------
 def analisis_exploratorio():
     """
