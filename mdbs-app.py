@@ -276,9 +276,58 @@ def cooperaciones_tecnicas():
 # -----------------------------------------------------------------------------
 def flujos_agregados():
     st.markdown('<h1 class="title">Flujos Agregados</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Analiza la información agregada de flujos relacionados con tus proyectos.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Analiza aprobaciones y desembolsos anuales.</p>', unsafe_allow_html=True)
 
-    st.write("Contenido de la página 'Flujos Agregados'.")
+    # Opciones de filtros
+    flujo_opciones = ["Aprobaciones", "Desembolsos"]
+    mdb_opciones = ["IADB"]
+
+    # Filtros en la barra lateral
+    st.sidebar.header("Filtros")
+    tipo_flujo = st.sidebar.selectbox("Selecciona el tipo de flujo:", flujo_opciones)
+    mdb = st.sidebar.selectbox("Selecciona MDB:", mdb_opciones)
+
+    # Selección de país
+    if tipo_flujo == "Desembolsos":
+        df = disbursement_data.copy()
+    else:  # Aprobaciones
+        df = outgoing_commitment_data.copy()
+
+    paises_disponibles = sorted(df["recipientcountry_codename"].dropna().unique())
+    filtro_pais = st.sidebar.multiselect(
+        "Selecciona país(es):",
+        options=paises_disponibles,
+        default=paises_disponibles
+    )
+
+    # Filtrar el DataFrame por país
+    df_filtrado = df[df["recipientcountry_codename"].isin(filtro_pais)]
+
+    # Agrupar datos por año y calcular la suma de value_usd
+    resumen_anual = (
+        df_filtrado.groupby("year")["value_usd"]
+        .sum()
+        .reset_index()
+        .sort_values(by="year")
+    )
+
+    # Gráfico de barras
+    st.subheader(f"Evolución anual de {tipo_flujo.lower()} en {mdb}")
+    fig_bar = px.bar(
+        resumen_anual,
+        x="year",
+        y="value_usd",
+        labels={"year": "Año", "value_usd": "Valor en USD"},
+        title=f"Total de {tipo_flujo.lower()} por año",
+        text_auto=True,
+        height=500
+    )
+    fig_bar.update_layout(
+        xaxis=dict(title="Año"),
+        yaxis=dict(title="Valor en USD"),
+        margin=dict(l=20, r=20, t=60, b=20),
+    )
+    st.plotly_chart(fig_bar, use_container_width=True)
 
 # -----------------------------------------------------------------------------
 # PÁGINA 4: GEODATA (MODIFICADA)
