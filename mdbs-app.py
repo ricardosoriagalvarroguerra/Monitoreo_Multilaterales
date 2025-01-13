@@ -287,21 +287,25 @@ def geodata():
     st.markdown('<h1 class="title">GeoData</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora datos geoespaciales de los proyectos.</p>', unsafe_allow_html=True)
     
-    # 1. Cargar DataFrames necesarios
+    # 1. Cargar el DataFrame de ubicación
     data_location = DATASETS["LOCATION_IADB"].copy()
-    data_activity = DATASETS["ACTIVITY_IADB"].copy()  # <-- Para la tabla
 
-    # 2. Obtener la lista de sectores (evitamos valores nulos)
+    # Verificar la existencia de las columnas necesarias
+    if "Sector" not in data_location.columns or "recipientcountry_codename" not in data_location.columns:
+        st.error("Faltan columnas necesarias ('Sector' o 'recipientcountry_codename') en el dataset.")
+        return
+
+    # 2. Obtener la lista de sectores únicos disponibles
     sectores_disponibles = data_location['Sector'].dropna().unique()
     
-    # 3. Filtro de la barra lateral para seleccionar un solo sector
+    # 3. Crear un filtro en la barra lateral para seleccionar un solo sector
     st.sidebar.header("Filtros (GeoData)")
     filtro_sector = st.sidebar.selectbox(
         "Selecciona un sector:",
         options=sectores_disponibles
     )
 
-    # 4. Filtrar el df de ubicación en función del sector elegido
+    # 4. Filtrar el DataFrame en función del sector seleccionado
     data_filtrada_loc = data_location[data_location['Sector'] == filtro_sector]
     
     # Si no hay datos tras filtrar, mostrar advertencia y salir
@@ -309,7 +313,7 @@ def geodata():
         st.warning("No se encontraron datos para el sector seleccionado.")
         return
 
-    # 5. Crear un mapa con Plotly Express scatter_mapbox
+    # 5. Crear un mapa interactivo con Plotly Express
     fig = px.scatter_mapbox(
         data_filtrada_loc,
         lat="Latitude",
@@ -327,27 +331,23 @@ def geodata():
         mapbox_style="carto-darkmatter"
     )
     fig.update_layout(margin={"r":0, "t":0, "l":0, "b":0})
-
     st.plotly_chart(fig, use_container_width=True)
 
     # -------------------------------------------------------------------------
-    # 6. Tabla con la cantidad de proyectos por país (orden descendente)
+    # 6. Crear una tabla con la cantidad de proyectos por país
     # -------------------------------------------------------------------------
-    # Filtramos el DataFrame 'data_activity' con el mismo sector
-    data_filtrada_act = data_activity[data_activity["Sector"] == filtro_sector]
-
-    # Agrupamos por país y contamos cuántos proyectos (iatiidentifier) hay
+    # Agrupar por país y contar proyectos (iatiidentifier)
     conteo_por_pais = (
-        data_filtrada_act
+        data_filtrada_loc
         .groupby("recipientcountry_codename")["iatiidentifier"]
-        .nunique()  # o .count(), si cada fila es un proyecto único
+        .nunique()  # O .count() si cada fila representa un proyecto único
         .reset_index(name="Cantidad de Proyectos")
     )
 
-    # Ordenar de manera descendente según la cantidad
+    # Ordenar los países de manera descendente por cantidad de proyectos
     conteo_por_pais = conteo_por_pais.sort_values(by="Cantidad de Proyectos", ascending=False)
 
-    # Título y despliegue de la tabla
+    # Mostrar la tabla debajo del mapa
     st.subheader(f"Cantidad de Proyectos en '{filtro_sector}' por País (orden descendente)")
     st.dataframe(conteo_por_pais)
 
