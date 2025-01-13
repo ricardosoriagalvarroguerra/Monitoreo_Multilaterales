@@ -356,17 +356,18 @@ def geodata():
     # Quitar índice original
     conteo_por_pais = conteo_por_pais.reset_index(drop=True)
 
-    # Disponer mapa y tabla en columnas lado a lado
-    col_map, col_table = st.columns([2, 1], gap="medium")
+    # Disponer mapa y tabla en columnas lado a lado (mismo ancho)
+    col_map, col_table = st.columns([2, 2], gap="medium")
 
     with col_map:
         st.plotly_chart(fig, use_container_width=True)
 
     with col_table:
-        st.subheader(f"Cantidad de Proyectos por País")
+        st.subheader("Cantidad de Proyectos por País")
         # Ocultar el índice del DataFrame
         conteo_por_pais_styled = conteo_por_pais.style.hide(axis="index")
-        st.dataframe(conteo_por_pais_styled, use_container_width=True)
+        # Aumentar altura para evitar scroll
+        st.dataframe(conteo_por_pais_styled, use_container_width=True, height=800)
 
 # -----------------------------------------------------------------------------
 # PÁGINA 5: ANÁLISIS EXPLORATORIO (PYGWALKER)
