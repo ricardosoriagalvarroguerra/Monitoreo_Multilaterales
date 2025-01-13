@@ -272,9 +272,46 @@ def flujos_agregados():
 def geodata():
     st.markdown('<h1 class="title">GeoData</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora datos geoespaciales de los proyectos.</p>', unsafe_allow_html=True)
+    
+    data = DATASETS["IADB_DASH_BDD"].copy()
+    sectores = data['Sector'].dropna().unique()
+    color_map = {sector: color for sector, color in zip(sectores, mcolors.TABLEAU_COLORS)}
 
-    st.write("Contenido de la página 'GeoData'.")
+    st.sidebar.header("Filtros (GeoData)")
+    filtro_sector = st.sidebar.selectbox(
+        "Selecciona el sector a visualizar:",
+        options=["General"] + list(sectores),
+        index=0
+    )
+    
+    # Filtrar datos por sector si no es "General"
+    data_filtrada = data.copy()
+    if filtro_sector != "General":
+        data_filtrada = data_filtrada[data_filtrada['Sector'] == filtro_sector]
 
+    m = folium.Map(
+        location=[data_filtrada['Latitude'].mean(), data_filtrada['Longitude'].mean()],
+        zoom_start=3,
+        tiles="CartoDB dark_matter"
+    )
+    marker_cluster = MarkerCluster().add_to(m)
+    
+    for _, row in data_filtrada.iterrows():
+        popup_info = f"""
+        <strong>ID:</strong> {row['iatiidentifier']}<br>
+        <strong>Country:</strong> {row['recipientcountry_codename']}<br>
+        <strong>Sector:</strong> {row['Sector']}
+        """
+        folium.CircleMarker(
+            location=(row['Latitude'], row['Longitude']),
+            radius=7,
+            popup=folium.Popup(popup_info, max_width=300),
+            color=color_map.get(row['Sector'], 'blue'),
+            fill=True,
+            fill_opacity=0.6
+        ).add_to(marker_cluster)
+
+    st_folium(m, width=800, height=600)
 
 # -----------------------------------------------------------------------------
 # PÁGINA 5: ANÁLISIS EXPLORATORIO (PYGWALKER) CON SELECTOR DE DATASET
