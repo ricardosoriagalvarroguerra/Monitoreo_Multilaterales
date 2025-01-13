@@ -275,7 +275,7 @@ def flujos_agregados():
     """
     Página principal de Flujos Agregados con las siguientes subpáginas:
     - Evolución Series de Tiempo
-    - [Otras subpáginas] (placeholder: "Instrumentos", "Subpage 2", "Subpage 3", etc.)
+    - [Otras subpáginas] (Instrumentos, Subpage 2, Subpage 3)
     """
     st.markdown('<h1 class="title">Flujos Agregados</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Analiza aprobaciones y desembolsos anuales.</p>', unsafe_allow_html=True)
@@ -292,20 +292,20 @@ def flujos_agregados():
     if subpagina_flujos == "Evolución Series de Tiempo":
         st.markdown("## Evolución Series de Tiempo")
 
-        # Ahora hacemos un nuevo radio para elegir entre Aprobaciones y Desembolsos
+        # Subpágina de Serie: Aprobaciones o Desembolsos
         subpagina_serie = st.sidebar.radio(
             "Selecciona la vista de Series de Tiempo:",
             ("Aprobaciones", "Desembolsos")
         )
 
         # ---------------------------------------------------------------------
-        # DATOS Y PREPARACIÓN COMUN
+        # 1. DATOS Y PREPARACIÓN COMUN
         # ---------------------------------------------------------------------
         data = DATASETS["OUTGOING_IADB"].copy()
         data["transactiondate_isodate"] = pd.to_datetime(data["transactiondate_isodate"], errors="coerce")
         data["year"] = data["transactiondate_isodate"].dt.year
 
-        # Filtro de deslizador por rango de años (en la barra lateral)
+        # Filtro de deslizador para rango de años
         min_year = int(data["year"].min())
         max_year = int(data["year"].max())
         rango_anios = st.sidebar.slider(
@@ -314,8 +314,6 @@ def flujos_agregados():
             max_value=max_year,
             value=(min_year, max_year)
         )
-
-        # Filtrar por rango de años
         data = data[(data["year"] >= rango_anios[0]) & (data["year"] <= rango_anios[1])]
 
         # Filtro de regiones (multiselect)
@@ -326,29 +324,27 @@ def flujos_agregados():
             options=regiones_disponibles,
             default=[]
         )
-
-        if len(regiones_seleccionadas) > 0:
+        if regiones_seleccionadas:
             data = data[data["region"].isin(regiones_seleccionadas)]
 
-        # Filtro de países (multiselect) sólo habilitado si se seleccionó al menos una región
-        paises_seleccionados = []
-        if len(regiones_seleccionadas) > 0:
+        # Filtro de países (multiselect) sólo si hay región(es) seleccionada(s)
+        if regiones_seleccionadas:
             paises_disponibles = sorted(data["recipientcountry_codename"].dropna().unique())
             paises_seleccionados = st.sidebar.multiselect(
                 "Selecciona uno o varios países:",
                 options=paises_disponibles,
                 default=[]
             )
-            if len(paises_seleccionados) > 0:
+            if paises_seleccionados:
                 data = data[data["recipientcountry_codename"].isin(paises_seleccionados)]
 
         # ---------------------------------------------------------------------
-        # SUBPÁGINA: APROBACIONES
+        # 2. SUBPÁGINA: APROBACIONES
         # ---------------------------------------------------------------------
         if subpagina_serie == "Aprobaciones":
             st.markdown("### Aprobaciones")
 
-            # Agrupación por año
+            # Agrupar por año y calcular el monto
             resumen_filtrado = (
                 data.groupby("year")["value_usd"]
                 .sum()
@@ -357,70 +353,61 @@ def flujos_agregados():
                 .sort_values("Año")
             )
 
-            # Variación interanual
+            # Variación interanual (%)
             resumen_filtrado["Var. Interanual (%)"] = (
                 resumen_filtrado["Monto (USD)"].pct_change() * 100
             ).fillna(0)
 
-            # 2 columnas para los 2 gráficos
-            col_barras, col_lineas = st.columns(2, gap="medium")
+            # Convertir a millones
+            resumen_filtrado["Monto (millones)"] = resumen_filtrado["Monto (USD)"] / 1_000_000
 
-            # (A) GRÁFICO DE BARRAS (MONTOS EN MILLONES)
-            with col_barras:
-                st.subheader("Monto Total por Año (en Millones)")
-                # Convertir a millones
-                resumen_filtrado["Monto (millones)"] = resumen_filtrado["Monto (USD)"] / 1_000_000
+            # -------- GRÁFICO DE BARRAS (MONTOS) --------
+            st.subheader("Monto Total por Año (en Millones)")
+            fig_barras = px.bar(
+                resumen_filtrado,
+                x="Año",
+                y="Monto (millones)",
+                text="Monto (millones)",
+            )
+            # Ajustes de layout y estética
+            fig_barras.update_traces(textposition="outside")
+            fig_barras.update_traces(texttemplate="%{y:,.2f}")
+            fig_barras.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=False),
+                font_color="#FFFFFF"
+            )
+            st.plotly_chart(fig_barras, use_container_width=True)
 
-                fig_barras = px.bar(
-                    resumen_filtrado,
-                    x="Año",
-                    y="Monto (millones)",
-                    text="Monto (millones)",
-                    title=""
-                )
-                # Personalizar layout
-                fig_barras.update_traces(textposition="outside")
-                fig_barras.update_layout(
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    xaxis=dict(showgrid=False),
-                    yaxis=dict(showgrid=False),
-                    font_color="#FFFFFF"
-                )
-                # Ajustar el formato del texto (f"{:,.2f}")
-                fig_barras.update_traces(
-                    texttemplate="%{y:,.2f}"
-                )
-                st.plotly_chart(fig_barras, use_container_width=True)
-
-            # (B) GRÁFICO DE LÍNEA (VAR. INTERANUAL %)
-            with col_lineas:
-                st.subheader("Variación Interanual (%)")
-                fig_lineas = px.line(
-                    resumen_filtrado,
-                    x="Año",
-                    y="Var. Interanual (%)",
-                    markers=True
-                )
-                fig_lineas.update_traces(line_shape="spline")
-                fig_lineas.update_layout(
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    xaxis=dict(showgrid=False),
-                    yaxis=dict(showgrid=False),
-                    font_color="#FFFFFF"
-                )
-                st.plotly_chart(fig_lineas, use_container_width=True)
+            # -------- GRÁFICO DE LÍNEA (VARIACIÓN) --------
+            st.subheader("Variación Interanual (%)")
+            fig_lineas = px.line(
+                resumen_filtrado,
+                x="Año",
+                y="Var. Interanual (%)",
+                markers=True
+            )
+            fig_lineas.update_traces(line_shape="spline")
+            fig_lineas.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=False),
+                font_color="#FFFFFF"
+            )
+            st.plotly_chart(fig_lineas, use_container_width=True)
 
         # ---------------------------------------------------------------------
-        # SUBPÁGINA: DESEMBOLSOS
+        # 3. SUBPÁGINA: DESEMBOLSOS
         # ---------------------------------------------------------------------
         elif subpagina_serie == "Desembolsos":
             st.markdown("### Desembolsos")
-            st.info("Aquí iría la lógica para desembolsos con la misma estructura de filtros.")
+            st.info("Aquí iría la lógica para desembolsos con la misma estructura de filtros y visualización.")
 
     # -------------------------------------------------------------------------
-    # OTRAS SUBPÁGINAS DE "FLUJOS AGREGADOS" (Instrumentos, Subpage 2, Subpage 3)
+    # OTRAS SUBPÁGINAS DE "FLUJOS AGREGADOS"
     # -------------------------------------------------------------------------
     elif subpagina_flujos == "Instrumentos":
         st.markdown("## Instrumentos")
