@@ -1,10 +1,13 @@
 import streamlit as st
 import pandas as pd
+import folium
+from folium.plugins import MarkerCluster
+import matplotlib.colors as mcolors
+from streamlit_folium import st_folium
 import plotly.express as px
 import plotly.graph_objects as go
 from pygwalker.api.streamlit import StreamlitRenderer
 import pygwalker as pyg
-import matplotlib.colors as mcolors
 
 # -----------------------------------------------------------------------------
 # CONFIGURACIÓN DE PÁGINA Y CSS PERSONALIZADO (MODO OSCURO)
