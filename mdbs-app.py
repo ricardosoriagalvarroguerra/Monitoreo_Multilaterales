@@ -328,28 +328,45 @@ def geodata():
             "lon": data_filtrada_loc["Longitude"].mean()
         },
         height=600,
-        mapbox_style="carto-darkmatter"
+        mapbox_style="carto-darkmatter",
+        title=f"Proyectos en el Sector: {filtro_sector}"  # Título en el mapa
     )
-    fig.update_layout(margin={"r":0, "t":0, "l":0, "b":0})
-    st.plotly_chart(fig, use_container_width=True)
 
-    # -------------------------------------------------------------------------
+    # Ajustar posición de la leyenda (arriba, bajo el título, en horizontal)
+    fig.update_layout(
+        margin={"r":0, "t":60, "l":0, "b":0},
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="center",
+            x=0.5
+        )
+    )
+
     # 6. Crear una tabla con la cantidad de proyectos por país
-    # -------------------------------------------------------------------------
-    # Agrupar por país y contar proyectos (iatiidentifier)
     conteo_por_pais = (
         data_filtrada_loc
         .groupby("recipientcountry_codename")["iatiidentifier"]
-        .nunique()  # O .count() si cada fila representa un proyecto único
+        .nunique()
         .reset_index(name="Cantidad de Proyectos")
     )
-
-    # Ordenar los países de manera descendente por cantidad de proyectos
+    # Ordenar
     conteo_por_pais = conteo_por_pais.sort_values(by="Cantidad de Proyectos", ascending=False)
 
-    # Mostrar la tabla debajo del mapa
-    st.subheader(f"Cantidad de Proyectos en '{filtro_sector}' por País (orden descendente)")
-    st.dataframe(conteo_por_pais)
+    # -------------------------------------------------------------------------
+    # Disponer mapa y tabla en columnas lado a lado
+    # -------------------------------------------------------------------------
+    col_map, col_table = st.columns([2, 1], gap="medium")
+
+    with col_map:
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col_table:
+        st.subheader(f"Cantidad de Proyectos por País")
+        # Ocultar la columna índice y hacer la tabla más “limpia”
+        conteo_por_pais_styled = conteo_por_pais.style.hide_index()
+        st.dataframe(conteo_por_pais_styled, use_container_width=True)
 
 # -----------------------------------------------------------------------------
 # PÁGINA 5: ANÁLISIS EXPLORATORIO (PYGWALKER)
