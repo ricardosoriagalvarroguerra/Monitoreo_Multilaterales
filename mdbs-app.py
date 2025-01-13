@@ -274,10 +274,91 @@ def cooperaciones_tecnicas():
 # PÁGINA 3: FLUJOS AGREGADOS
 # -----------------------------------------------------------------------------
 def flujos_agregados():
+    """
+    Página principal de Flujos Agregados con subpáginas:
+    - Aprobaciones
+    - (Futuras subpáginas: Desembolsos, Instrumentos)
+    """
+
+    # Título de la página
     st.markdown('<h1 class="title">Flujos Agregados</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Analiza aprobaciones y desembolsos anuales.</p>', unsafe_allow_html=True)
 
-    st.write("Aquí vendría la lógica para flujos agregados, según tus datasets.")
+    # Selector de subpágina
+    subpagina = st.sidebar.radio(
+        "Selecciona la subpágina:",
+        ("Aprobaciones", "Desembolsos", "Instrumentos")
+    )
+
+    # Cargar dataset correspondiente
+    data = DATASETS["OUTGOING_IADB"].copy()
+
+    # Subpágina: Aprobaciones
+    if subpagina == "Aprobaciones":
+        st.markdown("## Aprobaciones")
+        st.markdown("### Análisis de aprobaciones por país")
+
+        # Filtro por país (recipientcountry_codename)
+        st.sidebar.header("Filtros (Aprobaciones)")
+        paises_disponibles = sorted(data["recipientcountry_codename"].dropna().unique())
+        filtro_pais = st.sidebar.multiselect(
+            "Selecciona uno o varios países:",
+            options=paises_disponibles,
+            default=paises_disponibles[:5]  # Selección predeterminada de los primeros 5
+        )
+
+        # Filtrar dataset según país seleccionado
+        data_filtrada = data[data["recipientcountry_codename"].isin(filtro_pais)]
+
+        if data_filtrada.empty:
+            st.warning("No se encontraron datos para los países seleccionados.")
+            return
+
+        # Resumen por año y país
+        data_filtrada["year"] = pd.to_datetime(data_filtrada["transactiondate_isodate"], errors="coerce").dt.year
+        resumen_aprobaciones = (
+            data_filtrada
+            .groupby(["year", "recipientcountry_codename"])["value_usd"]
+            .sum()
+            .reset_index()
+            .rename(columns={"value_usd": "Monto (USD)", "year": "Año", "recipientcountry_codename": "País"})
+        )
+
+        # Gráfico: Serie de tiempo por país
+        fig_aprobaciones = px.line(
+            resumen_aprobaciones,
+            x="Año",
+            y="Monto (USD)",
+            color="País",
+            title="Evolución de las Aprobaciones por País",
+            markers=True
+        )
+        fig_aprobaciones.update_layout(
+            xaxis_title="Año",
+            yaxis_title="Monto (USD)",
+            legend_title="País",
+            font_color="#FFFFFF",
+            plot_bgcolor="#1E1E1E",
+            paper_bgcolor="#1E1E1E"
+        )
+
+        # Mostrar el gráfico
+        st.plotly_chart(fig_aprobaciones, use_container_width=True)
+
+        # Tabla de datos
+        with st.expander("Ver tabla de datos"):
+            st.dataframe(resumen_aprobaciones)
+
+    # Subpágina: Desembolsos (por implementar)
+    elif subpagina == "Desembolsos":
+        st.markdown("## Desembolsos")
+        st.markdown("### Esta sección está en desarrollo. Volveremos pronto.")
+
+    # Subpágina: Instrumentos (por implementar)
+    elif subpagina == "Instrumentos":
+        st.markdown("## Instrumentos")
+        st.markdown("### Esta sección está en desarrollo. Volveremos pronto.")
+
 
 # -----------------------------------------------------------------------------
 # PÁGINA 4: GEODATA
