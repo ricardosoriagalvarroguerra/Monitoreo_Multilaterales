@@ -80,10 +80,14 @@ def load_dataframes():
     df_location["Latitude"] = df_location["Latitude"].astype(float)
     df_location["Longitude"] = df_location["Longitude"].astype(float)
 
+    # Dataset para la tabla de actividad por país (nuevo)
+    df_activity = pd.read_parquet("activity_iadb.parquet")
+
     # Diccionario de DataFrames
     datasets = {
         "IADB_DASH_BDD": df_iadb,
-        "LOCATION_IADB": df_location
+        "LOCATION_IADB": df_location,
+        "ACTIVITY_IADB": df_activity
     }
     return datasets
 
@@ -102,11 +106,8 @@ def get_pyg_renderer_by_name(dataset_name: str) -> StreamlitRenderer:
     renderer = StreamlitRenderer(
         df,
         kernel_computation=True  # Acelera cálculos en grandes datasets
-        # Puedes usar parámetros adicionales si lo deseas, por ejemplo:
-        # spec_io_mode="rw", spec="./gw_config.json", etc.
     )
     return renderer
-
 
 # -----------------------------------------------------------------------------
 # PÁGINA 1: MONITOREO MULTILATERALES
@@ -116,7 +117,6 @@ def monitoreo_multilaterales():
     st.markdown('<p class="subtitle">Página principal para el seguimiento de proyectos e información multinacional.</p>', unsafe_allow_html=True)
     
     st.write("Contenido de la página 'Monitoreo Multilaterales'.")
-
 
 # -----------------------------------------------------------------------------
 # PÁGINA 2: COOPERACIONES TÉCNICAS
@@ -271,7 +271,6 @@ def cooperaciones_tecnicas():
     )
     st.plotly_chart(fig_lollipop, use_container_width=True)
 
-
 # -----------------------------------------------------------------------------
 # PÁGINA 3: FLUJOS AGREGADOS
 # -----------------------------------------------------------------------------
@@ -281,74 +280,76 @@ def flujos_agregados():
 
     st.write("Contenido de la página 'Flujos Agregados'.")
 
-
 # -----------------------------------------------------------------------------
-# PÁGINA 4: GEODATA
+# PÁGINA 4: GEODATA (MODIFICADA)
 # -----------------------------------------------------------------------------
 def geodata():
     st.markdown('<h1 class="title">GeoData</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora datos geoespaciales de los proyectos.</p>', unsafe_allow_html=True)
     
-    # 1. Cargar el dataset
-    data = DATASETS["LOCATION_IADB"].copy()
+    # 1. Cargar DataFrames necesarios
+    data_location = DATASETS["LOCATION_IADB"].copy()
+    data_activity = DATASETS["ACTIVITY_IADB"].copy()  # <-- Para la tabla
 
-    # 2. Preparar listado de sectores y un mapa de colores discreto
-    sectores = data['Sector'].dropna().unique()  # Sectores distintos
-    color_list = list(mcolors.TABLEAU_COLORS.values())
-    color_map = {}
-    for sector, color in zip(sectores, color_list):
-        color_map[sector] = color
-
-    # 3. Filtro de la barra lateral para seleccionar uno o varios sectores
+    # 2. Obtener la lista de sectores (evitamos valores nulos)
+    sectores_disponibles = data_location['Sector'].dropna().unique()
+    
+    # 3. Filtro de la barra lateral para seleccionar un solo sector
     st.sidebar.header("Filtros (GeoData)")
-    filtro_sectores = st.sidebar.multiselect(
-        "Selecciona uno o varios sectores a visualizar:",
-        options=list(sectores),
-        default=[]
+    filtro_sector = st.sidebar.selectbox(
+        "Selecciona un sector:",
+        options=sectores_disponibles
     )
 
-    # 4. Filtrar el dataframe en función de los sectores seleccionados
-    data_filtrada = data.copy()
-    if len(filtro_sectores) > 0:
-        data_filtrada = data_filtrada[data_filtrada['Sector'].isin(filtro_sectores)]
-    else:
-        st.warning("No se han seleccionado sectores, o no hay datos para la selección actual.")
+    # 4. Filtrar el df de ubicación en función del sector elegido
+    data_filtrada_loc = data_location[data_location['Sector'] == filtro_sector]
+    
+    # Si no hay datos tras filtrar, mostrar advertencia y salir
+    if data_filtrada_loc.empty:
+        st.warning("No se encontraron datos para el sector seleccionado.")
         return
 
-    # 5. Generar la paleta de colores para los sectores filtrados
-    color_discrete_map = {
-        sec: color_map.get(sec, "#4682B4") 
-        for sec in data_filtrada["Sector"].unique()
-    }
-
-    # 6. Crear la figura con Plotly Express scatter_mapbox
+    # 5. Crear un mapa con Plotly Express scatter_mapbox
     fig = px.scatter_mapbox(
-        data_filtrada,
+        data_filtrada_loc,
         lat="Latitude",
         lon="Longitude",
         color="Sector",
-        # Tamaño de cada punto (fijo o basado en alguna columna)
         size_max=15,
-        hover_name="iatiidentifier",  # aparece como título en el hover
-        hover_data=["recipientcountry_codename", "Sector"],  # datos adicionales en tooltip
-        color_discrete_map=color_discrete_map,
-        zoom=3,  # nivel de zoom inicial
+        hover_name="iatiidentifier",
+        hover_data=["recipientcountry_codename", "Sector"],
+        zoom=3,
         center={
-            "lat": data_filtrada['Latitude'].mean(), 
-            "lon": data_filtrada['Longitude'].mean()
+            "lat": data_filtrada_loc["Latitude"].mean(), 
+            "lon": data_filtrada_loc["Longitude"].mean()
         },
-        height=600  # altura del mapa
+        height=600,
+        mapbox_style="carto-darkmatter"
     )
+    fig.update_layout(margin={"r":0, "t":0, "l":0, "b":0})
 
-    # 7. Estilo oscuro (o el que prefieras) y ajustes de márgenes
-    fig.update_layout(
-        mapbox_style="carto-darkmatter",
-        margin={"r":0, "t":0, "l":0, "b":0}
-    )
-
-    # 8. Mostrar el mapa con Plotly en Streamlit
     st.plotly_chart(fig, use_container_width=True)
 
+    # -------------------------------------------------------------------------
+    # 6. Tabla con la cantidad de proyectos por país (orden descendente)
+    # -------------------------------------------------------------------------
+    # Filtramos el DataFrame 'data_activity' con el mismo sector
+    data_filtrada_act = data_activity[data_activity["Sector"] == filtro_sector]
+
+    # Agrupamos por país y contamos cuántos proyectos (iatiidentifier) hay
+    conteo_por_pais = (
+        data_filtrada_act
+        .groupby("recipientcountry_codename")["iatiidentifier"]
+        .nunique()  # o .count(), si cada fila es un proyecto único
+        .reset_index(name="Cantidad de Proyectos")
+    )
+
+    # Ordenar de manera descendente según la cantidad
+    conteo_por_pais = conteo_por_pais.sort_values(by="Cantidad de Proyectos", ascending=False)
+
+    # Título y despliegue de la tabla
+    st.subheader(f"Cantidad de Proyectos en '{filtro_sector}' por País (orden descendente)")
+    st.dataframe(conteo_por_pais)
 
 # -----------------------------------------------------------------------------
 # PÁGINA 5: ANÁLISIS EXPLORATORIO (PYGWALKER)
@@ -369,7 +370,6 @@ def analisis_exploratorio():
 
     # Mostramos la interfaz exploratoria
     renderer.explorer()
-
 
 # -----------------------------------------------------------------------------
 # DICCIONARIO DE PÁGINAS
