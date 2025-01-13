@@ -289,20 +289,17 @@ def geodata():
     st.markdown('<h1 class="title">GeoData</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora datos geoespaciales de los proyectos.</p>', unsafe_allow_html=True)
     
-    # Aquí usamos el dataset con la columna 'point_pos'
+    # Cargamos el dataset con información geográfica
     data = DATASETS["LOCATION_IADB"].copy()
 
-    # Asegúrate de que la columna 'Sector' exista en este dataset. 
-    # Si no existe, adapta o elimina la lógica que la usa.
+    # Asignamos colores para cada "Sector"
     sectores = data['Sector'].dropna().unique()
-    # Usaremos TABLEAU_COLORS para asignar colores a cada sector
     color_list = list(mcolors.TABLEAU_COLORS.values())
     color_map = {}
-    # Asignar color a cada sector (si hay más sectores que colores, 
-    # podrías hacer algo más sofisticado)
     for sector, color in zip(sectores, color_list):
         color_map[sector] = color
 
+    # Filtro de la barra lateral para "Sector"
     st.sidebar.header("Filtros (GeoData)")
     filtro_sector = st.sidebar.selectbox(
         "Selecciona el sector a visualizar:",
@@ -310,26 +307,25 @@ def geodata():
         index=0
     )
     
-    # Filtrar datos por sector si no es "General"
+    # Filtramos el dataframe si se selecciona un sector específico
     data_filtrada = data.copy()
     if filtro_sector != "General":
         data_filtrada = data_filtrada[data_filtrada['Sector'] == filtro_sector]
 
-    # Crear mapa (usando folium)
+    # Si el filtro deja el DataFrame vacío, mostramos advertencia
     if len(data_filtrada) == 0:
         st.warning("No se encontraron datos para el sector seleccionado.")
         return
 
-    # Centrar el mapa en la media de las coordenadas
+    # Creamos el mapa centrado en la media de las coordenadas filtradas
     m = folium.Map(
         location=[data_filtrada['Latitude'].mean(), data_filtrada['Longitude'].mean()],
         zoom_start=3,
         tiles="CartoDB dark_matter"
     )
-    marker_cluster = MarkerCluster().add_to(m)
-    
+
+    # Añadimos cada punto de manera individual, sin clusterizar
     for _, row in data_filtrada.iterrows():
-        # Ajusta estas claves según las columnas que tengas
         popup_info = f"""
         <strong>ID:</strong> {row.get('iatiidentifier', 'N/A')}<br>
         <strong>Country:</strong> {row.get('recipientcountry_codename', 'N/A')}<br>
@@ -342,8 +338,9 @@ def geodata():
             color=color_map.get(row['Sector'], '#3388ff'),
             fill=True,
             fill_opacity=0.6
-        ).add_to(marker_cluster)
+        ).add_to(m)
 
+    # Mostramos el mapa en Streamlit
     st_folium(m, width=800, height=600)
 
 
