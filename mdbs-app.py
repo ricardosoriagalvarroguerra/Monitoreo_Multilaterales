@@ -314,17 +314,19 @@ def geodata():
         return
 
     # 5. Crear un mapa interactivo con Plotly Express
+    #    - Se fuerza el color para el sector al valor "#ef233c"
     fig = px.scatter_mapbox(
         data_filtrada_loc,
         lat="Latitude",
         lon="Longitude",
         color="Sector",
+        color_discrete_map={filtro_sector: "#ef233c"},  # Puntos en "#ef233c"
         size_max=15,
         hover_name="iatiidentifier",
         hover_data=["recipientcountry_codename", "Sector"],
         zoom=3,
         center={
-            "lat": data_filtrada_loc["Latitude"].mean(), 
+            "lat": data_filtrada_loc["Latitude"].mean(),
             "lon": data_filtrada_loc["Longitude"].mean()
         },
         height=600,
@@ -332,15 +334,15 @@ def geodata():
         title=f"Proyectos en el Sector: {filtro_sector}"
     )
 
-    # Ajustar la posición de la leyenda arriba (debajo del título, en horizontal)
+    # Ajustar la posición de la leyenda para no chocar con el título/subtítulo
     fig.update_layout(
-        margin={"r":0, "t":60, "l":0, "b":0},
+        margin={"r":20, "t":80, "l":20, "b":20},
         legend=dict(
             orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="center",
-            x=0.5
+            yanchor="top",
+            y=1.04,      # Ubicarla justo por debajo del título
+            xanchor="right",
+            x=0.99
         )
     )
 
@@ -364,9 +366,7 @@ def geodata():
 
     with col_table:
         st.subheader("Cantidad de Proyectos por País")
-        # Ocultar el índice del DataFrame
         conteo_por_pais_styled = conteo_por_pais.style.hide(axis="index")
-        # Aumentar altura para evitar scroll
         st.dataframe(conteo_por_pais_styled, use_container_width=True, height=800)
 
 # -----------------------------------------------------------------------------
