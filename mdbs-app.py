@@ -4,11 +4,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 from pygwalker.api.streamlit import StreamlitRenderer
 import pygwalker as pyg
-
 import folium
 from streamlit_folium import st_folium
 from folium.plugins import MarkerCluster
-
 import random
 
 # -----------------------------------------------------------------------------
@@ -275,146 +273,167 @@ def cooperaciones_tecnicas():
 # -----------------------------------------------------------------------------
 def flujos_agregados():
     """
-    Página principal de Flujos Agregados con subpáginas:
-    - Aprobaciones
-    - Desembolsos
-    - Instrumentos
+    Página principal de Flujos Agregados con las siguientes subpáginas:
+    - Evolución Series de Tiempo
+    - [Otras subpáginas] (placeholder: "Instrumentos", "Subpage 2", "Subpage 3", etc.)
     """
     st.markdown('<h1 class="title">Flujos Agregados</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Analiza aprobaciones y desembolsos anuales.</p>', unsafe_allow_html=True)
 
-    subpagina = st.sidebar.radio(
-        "Selecciona la subpágina:",
-        ("Aprobaciones", "Desembolsos", "Instrumentos")
+    # Subpágina principal de "Flujos Agregados"
+    subpagina_flujos = st.sidebar.radio(
+        "Selecciona la subpágina de Flujos Agregados:",
+        ("Evolución Series de Tiempo", "Instrumentos", "Subpage 2", "Subpage 3")
     )
 
-    if subpagina == "Aprobaciones":
-        st.markdown("## Aprobaciones")
+    # -------------------------------------------------------------------------
+    # SUBPÁGINA: EVOLUCIÓN SERIES DE TIEMPO
+    # -------------------------------------------------------------------------
+    if subpagina_flujos == "Evolución Series de Tiempo":
+        st.markdown("## Evolución Series de Tiempo")
+
+        # Ahora hacemos un nuevo radio para elegir entre Aprobaciones y Desembolsos
+        subpagina_serie = st.sidebar.radio(
+            "Selecciona la vista de Series de Tiempo:",
+            ("Aprobaciones", "Desembolsos")
+        )
 
         # ---------------------------------------------------------------------
-        # 1. CARGAR Y PREPARAR DATOS
+        # DATOS Y PREPARACIÓN COMUN
         # ---------------------------------------------------------------------
         data = DATASETS["OUTGOING_IADB"].copy()
-
-        # Convertimos columna de fecha a datetime
         data["transactiondate_isodate"] = pd.to_datetime(data["transactiondate_isodate"], errors="coerce")
         data["year"] = data["transactiondate_isodate"].dt.year
 
-        # Resumen global (sin filtro), agrupado por año
-        resumen_global = (
-            data.groupby("year")["value_usd"]
-            .sum()
-            .reset_index()
-            .rename(columns={"year": "Año", "value_usd": "Monto (USD)"})
-            .sort_values("Año")
+        # Filtro de deslizador por rango de años (en la barra lateral)
+        min_year = int(data["year"].min())
+        max_year = int(data["year"].max())
+        rango_anios = st.sidebar.slider(
+            "Selecciona el rango de años:",
+            min_value=min_year,
+            max_value=max_year,
+            value=(min_year, max_year)
         )
 
-        # Calcular variación interanual (YoY) como %:
-        # yoy = (monto_año_actual - monto_año_anterior) / monto_año_anterior * 100
-        resumen_global["Var. Interanual (%)"] = (
-            resumen_global["Monto (USD)"].pct_change() * 100
-        ).fillna(0)
+        # Filtrar por rango de años
+        data = data[(data["year"] >= rango_anios[0]) & (data["year"] <= rango_anios[1])]
 
-        # ---------------------------------------------------------------------
-        # 2. CREAR FILTROS: REGIÓN Y PAÍS
-        # ---------------------------------------------------------------------
-        st.sidebar.header("Filtros (Aprobaciones)")
-
-        # Filtro por Región (MULTISELECT)
+        # Filtro de regiones (multiselect)
+        st.sidebar.markdown("### Filtro por Región")
         regiones_disponibles = sorted(data["region"].dropna().unique())
         regiones_seleccionadas = st.sidebar.multiselect(
             "Selecciona una o varias regiones:",
             options=regiones_disponibles,
-            default=[]  # sin nada al inicio
+            default=[]
         )
 
-        # Filtrar datos por las regiones seleccionadas (si hay)
         if len(regiones_seleccionadas) > 0:
-            data_filtrada = data[data["region"].isin(regiones_seleccionadas)].copy()
-        else:
-            data_filtrada = data.copy()  # sin filtro de región
+            data = data[data["region"].isin(regiones_seleccionadas)]
 
-        # Filtro por País, sólo habilitado si existe al menos una región seleccionada
+        # Filtro de países (multiselect) sólo habilitado si se seleccionó al menos una región
+        paises_seleccionados = []
         if len(regiones_seleccionadas) > 0:
-            paises_disponibles = sorted(data_filtrada["recipientcountry_codename"].dropna().unique())
+            paises_disponibles = sorted(data["recipientcountry_codename"].dropna().unique())
             paises_seleccionados = st.sidebar.multiselect(
-                "Selecciona uno o varios países (opcional):",
+                "Selecciona uno o varios países:",
                 options=paises_disponibles,
                 default=[]
             )
             if len(paises_seleccionados) > 0:
-                data_filtrada = data_filtrada[data_filtrada["recipientcountry_codename"].isin(paises_seleccionados)]
-        else:
-            # Si no hay región seleccionada, no hay filtro de países
-            paises_seleccionados = []
-
-        # Crear nuevo resumen según filtros
-        resumen_filtrado = (
-            data_filtrada.groupby("year")["value_usd"]
-            .sum()
-            .reset_index()
-            .rename(columns={"year": "Año", "value_usd": "Monto (USD)"})
-            .sort_values("Año")
-        )
-        resumen_filtrado["Var. Interanual (%)"] = (
-            resumen_filtrado["Monto (USD)"].pct_change() * 100
-        ).fillna(0)
+                data = data[data["recipientcountry_codename"].isin(paises_seleccionados)]
 
         # ---------------------------------------------------------------------
-        # 3. DIBUJAR GRÁFICOS (2 COLUMNAS)
+        # SUBPÁGINA: APROBACIONES
         # ---------------------------------------------------------------------
-        col_barras, col_lineas = st.columns(2, gap="medium")
+        if subpagina_serie == "Aprobaciones":
+            st.markdown("### Aprobaciones")
 
-        # ------------------- (A) GRÁFICO DE BARRAS ---------------------------
-        with col_barras:
-            st.subheader("Monto Total por Año")
-            fig_barras = px.bar(
-                resumen_filtrado,
-                x="Año",
-                y="Monto (USD)",
-                text="Monto (USD)",
-                title="",
+            # Agrupación por año
+            resumen_filtrado = (
+                data.groupby("year")["value_usd"]
+                .sum()
+                .reset_index()
+                .rename(columns={"year": "Año", "value_usd": "Monto (USD)"})
+                .sort_values("Año")
             )
-            # Quitar fondos
-            fig_barras.update_layout(
-                plot_bgcolor="rgba(0,0,0,0)",
-                paper_bgcolor="rgba(0,0,0,0)",
-                xaxis=dict(showgrid=False),
-                yaxis=dict(showgrid=False),
-                font_color="#FFFFFF"
-            )
-            fig_barras.update_traces(textposition="outside")
-            st.plotly_chart(fig_barras, use_container_width=True)
 
-        # ------------------ (B) GRÁFICO DE LÍNEA (VAR. YoY) ------------------
-        with col_lineas:
-            st.subheader("Variación Interanual (%)")
-            fig_lineas = px.line(
-                resumen_filtrado,
-                x="Año",
-                y="Var. Interanual (%)",
-                markers=True
-            )
-            fig_lineas.update_traces(
-                line_shape="spline"
-            )
-            # Quitar fondos
-            fig_lineas.update_layout(
-                plot_bgcolor="rgba(0,0,0,0)",
-                paper_bgcolor="rgba(0,0,0,0)",
-                xaxis=dict(showgrid=False),
-                yaxis=dict(showgrid=False),
-                font_color="#FFFFFF"
-            )
-            st.plotly_chart(fig_lineas, use_container_width=True)
+            # Variación interanual
+            resumen_filtrado["Var. Interanual (%)"] = (
+                resumen_filtrado["Monto (USD)"].pct_change() * 100
+            ).fillna(0)
 
-    elif subpagina == "Desembolsos":
-        st.markdown("## Desembolsos")
-        st.markdown("### Esta sección está en desarrollo. Volveremos pronto.")
+            # 2 columnas para los 2 gráficos
+            col_barras, col_lineas = st.columns(2, gap="medium")
 
-    elif subpagina == "Instrumentos":
+            # (A) GRÁFICO DE BARRAS (MONTOS EN MILLONES)
+            with col_barras:
+                st.subheader("Monto Total por Año (en Millones)")
+                # Convertir a millones
+                resumen_filtrado["Monto (millones)"] = resumen_filtrado["Monto (USD)"] / 1_000_000
+
+                fig_barras = px.bar(
+                    resumen_filtrado,
+                    x="Año",
+                    y="Monto (millones)",
+                    text="Monto (millones)",
+                    title=""
+                )
+                # Personalizar layout
+                fig_barras.update_traces(textposition="outside")
+                fig_barras.update_layout(
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    xaxis=dict(showgrid=False),
+                    yaxis=dict(showgrid=False),
+                    font_color="#FFFFFF"
+                )
+                # Ajustar el formato del texto (f"{:,.2f}")
+                fig_barras.update_traces(
+                    texttemplate="%{y:,.2f}"
+                )
+                st.plotly_chart(fig_barras, use_container_width=True)
+
+            # (B) GRÁFICO DE LÍNEA (VAR. INTERANUAL %)
+            with col_lineas:
+                st.subheader("Variación Interanual (%)")
+                fig_lineas = px.line(
+                    resumen_filtrado,
+                    x="Año",
+                    y="Var. Interanual (%)",
+                    markers=True
+                )
+                fig_lineas.update_traces(line_shape="spline")
+                fig_lineas.update_layout(
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    xaxis=dict(showgrid=False),
+                    yaxis=dict(showgrid=False),
+                    font_color="#FFFFFF"
+                )
+                st.plotly_chart(fig_lineas, use_container_width=True)
+
+        # ---------------------------------------------------------------------
+        # SUBPÁGINA: DESEMBOLSOS
+        # ---------------------------------------------------------------------
+        elif subpagina_serie == "Desembolsos":
+            st.markdown("### Desembolsos")
+            st.info("Aquí iría la lógica para desembolsos con la misma estructura de filtros.")
+
+    # -------------------------------------------------------------------------
+    # OTRAS SUBPÁGINAS DE "FLUJOS AGREGADOS" (Instrumentos, Subpage 2, Subpage 3)
+    # -------------------------------------------------------------------------
+    elif subpagina_flujos == "Instrumentos":
         st.markdown("## Instrumentos")
-        st.markdown("### Esta sección está en desarrollo. Volveremos pronto.")
+        st.markdown("Esta sección está en desarrollo...")
+
+    elif subpagina_flujos == "Subpage 2":
+        st.markdown("## Subpage 2")
+        st.markdown("Contenido por definir...")
+
+    elif subpagina_flujos == "Subpage 3":
+        st.markdown("## Subpage 3")
+        st.markdown("Contenido por definir...")
+
 
 
 # -----------------------------------------------------------------------------
