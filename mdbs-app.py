@@ -68,7 +68,7 @@ class Card:
                 # action=mui.IconButton(mui.icons.material.DarkMode, sx={"color": "#fff"})
                 #
                 # Si da error con ".material", usa solo mui.icons.DarkMode o elimina el ícono:
-                action=mui.IconButton(mui.icons.DarkMode, sx={"color": "#fff"})
+                action=None
             ):
                 pass
 
