@@ -33,18 +33,19 @@ country_data = (
 country_data["value_usd"] = country_data["value_usd"] / 1e6
 
 # Crear el layout para el dashboard
-layout = [dashboard.Item("bar_chart", 0, 0, 6, 2)]  # Reducido en tamaño
+layout = [dashboard.Item("bar_chart", 0, 0, 8, 5)]  # Incrementar dimensiones
 
 # Página principal
 st.title("GeoData Dashboard")
 
 with elements("GeoData"):
-    with dashboard.Grid(layout):
+    # Hacer el dashboard movible
+    with dashboard.Grid(layout, draggableHandle=".drag-handle"):
         nivo.Bar(
             data=country_data.to_dict("records"),
             keys=["value_usd"],
             indexBy="recipientcountry_codename",
-            margin={"top": 30, "right": 50, "bottom": 70, "left": 100},
+            margin={"top": 30, "right": 100, "bottom": 100, "left": 150},
             padding=0.3,
             layout="horizontal",
             colors={"scheme": "nivo"},
@@ -54,8 +55,8 @@ with elements("GeoData"):
                 "tickRotation": 45,
                 "legend": "Valor Acumulado (Millones USD)",
                 "legendPosition": "middle",
-                "legendOffset": 40,
-                "tickColor": "#FFFFFF",  # Ejes en blanco
+                "legendOffset": 50,
+                "tickColor": "#FFFFFF",  # Color blanco para los ticks
             },
             axisLeft={
                 "tickSize": 5,
@@ -64,7 +65,7 @@ with elements("GeoData"):
                 "legend": "País",
                 "legendPosition": "middle",
                 "legendOffset": -70,
-                "tickColor": "#FFFFFF",  # Ejes en blanco
+                "tickColor": "#FFFFFF",  # Color blanco para los ticks
             },
             enableLabel=True,
             labelSkipWidth=12,
@@ -81,7 +82,7 @@ with elements("GeoData"):
                 }
             ],
             theme={
-                "textColor": "#FFFFFF",  # Texto en blanco
+                "textColor": "#FFFFFF",  # Texto en color blanco
                 "tooltip": {
                     "container": {
                         "background": "#333333",
@@ -89,5 +90,5 @@ with elements("GeoData"):
                     }
                 }
             },
-            sortByValue=True,  # Ordenar en sentido descendente
+            sortByValue=True,  # Ordenar descendente
         )
