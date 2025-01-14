@@ -77,6 +77,12 @@ def load_dataframes():
     df_location["Latitude"] = df_location["Latitude"].astype(float)
     df_location["Longitude"] = df_location["Longitude"].astype(float)
 
+    # Dataset único con lat/long y montos (para GeoData - Montos)
+    df_unique = pd.read_parquet("unique_locations.parquet")
+    df_unique[["Latitude", "Longitude"]] = df_unique["point_pos"].str.split(",", expand=True)
+    df_unique["Latitude"] = df_unique["Latitude"].astype(float)
+    df_unique["Longitude"] = df_unique["Longitude"].astype(float)
+
     # Dataset para la tabla de actividad por país
     df_activity = pd.read_parquet("activity_iadb.parquet")
 
@@ -90,6 +96,7 @@ def load_dataframes():
     datasets = {
         "IADB_DASH_BDD": df_iadb,
         "LOCATION_IADB": df_location,
+        "UNIQUE_LOCATIONS": df_unique,
         "ACTIVITY_IADB": df_activity,
         "OUTGOING_IADB": df_outgoing,
         "DISBURSEMENTS_DATA": df_disbursements
@@ -250,18 +257,21 @@ def cooperaciones_tecnicas():
                 showlegend=False
             )
         )
-    fig_lollipop.add_trace(
-        go.Scatter(
-            x=porcentaje_tc["Porcentaje TC"],
-            y=porcentaje_tc["Year"],
-            mode="markers+text",
-            marker=dict(color="crimson", size=10),
-            text=round(row["Porcentaje TC"], 2),
-            textposition="middle right",
-            textfont=dict(color="#FFFFFF"),
-            name="Porcentaje TC"
+    # Aquí necesitamos que el text muestre cada valor en su respectivo año
+    # Podemos usar un bucle para generar cada marcador + texto
+    for index, row in porcentaje_tc.iterrows():
+        fig_lollipop.add_trace(
+            go.Scatter(
+                x=[row["Porcentaje TC"]],
+                y=[row["Year"]],
+                mode="markers+text",
+                marker=dict(color="crimson", size=10),
+                text=round(row["Porcentaje TC"], 2),
+                textposition="middle right",
+                textfont=dict(color="#FFFFFF"),
+                showlegend=False
+            )
         )
-    )
 
     fig_lollipop.update_layout(
         title="Porcentaje de Cooperaciones Técnicas en el Total de Aprobaciones",
@@ -277,27 +287,26 @@ def cooperaciones_tecnicas():
     )
     st.plotly_chart(fig_lollipop, use_container_width=True)
 
-# -----------------------------------------------------------------------------
-# PÁGINA 3: GEODATA (SOLO "Mapa y Barras")
-# -----------------------------------------------------------------------------
-def geodata():
-    """
-    Página de GeoData en la app Streamlit.
-    Solo muestra la vista de "Mapa y Barras".
-    """
 
-    st.markdown('<h1 class="title">GeoData</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Explora datos geoespaciales de los proyectos.</p>', unsafe_allow_html=True)
+# -----------------------------------------------------------------------------
+# PÁGINA 3 (modificada): GEODATA con subpáginas
+# -----------------------------------------------------------------------------
+def geodata_frecuencia():
+    """
+    Subpágina Frecuencia: muestra un mapa y barras con la cantidad de proyectos
+    (frecuencia) en 'location_iadb.parquet'.
+    """
+    st.markdown('<h2 class="title">GeoData - Frecuencia</h2>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Frecuencia de proyectos por sector/país.</p>', unsafe_allow_html=True)
 
-    # Cargamos el dataframe
     data_location = DATASETS["LOCATION_IADB"].copy()
 
-    # Validar que existan las columnas necesarias
+    # Verificar columnas
     if "Sector" not in data_location.columns or "recipientcountry_codename" not in data_location.columns:
         st.error("Faltan columnas ('Sector' o 'recipientcountry_codename') en LOCATION_IADB.")
         return
 
-    st.sidebar.header("Filtros (Mapa y Barras)")
+    st.sidebar.header("Filtros (Frecuencia)")
     sectores_disponibles = data_location['Sector'].dropna().unique()
     
     filtro_sector = st.sidebar.selectbox(
@@ -305,7 +314,7 @@ def geodata():
         options=sectores_disponibles
     )
 
-    # Filtrar por sector seleccionado
+    # Filtrar por sector
     data_filtrada_loc = data_location[data_location['Sector'] == filtro_sector]
 
     if data_filtrada_loc.empty:
@@ -319,7 +328,7 @@ def geodata():
         lon="Longitude",
         color="Sector",
         color_discrete_map={filtro_sector: "#ef233c"},
-        size_max=15,
+        size_max=15,  # Aquí la frecuencia no escalará tamaño, 1 proyecto = 1 punto
         hover_name="iatiidentifier",
         hover_data=["recipientcountry_codename", "Sector"],
         zoom=3,
@@ -382,6 +391,129 @@ def geodata():
         st.plotly_chart(fig_map, use_container_width=True)
     with col_bar:
         st.plotly_chart(fig_bars, use_container_width=True)
+
+
+def geodata_montos():
+    """
+    Subpágina Montos: muestra un mapa y barras con la sumatoria de montos (value_usd)
+    en 'unique_locations.parquet'. El tamaño de los puntos en el mapa es proporcional
+    al valor en USD.
+    """
+    st.markdown('<h2 class="title">GeoData - Montos</h2>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Visualiza el total de montos (value_usd) por ubicación.</p>', unsafe_allow_html=True)
+
+    # Cargamos el dataframe "UNIQUE_LOCATIONS"
+    data_unique = DATASETS["UNIQUE_LOCATIONS"].copy()
+
+    # Verificar columnas
+    needed_cols = {"Sector", "recipientcountry_codename", "Latitude", "Longitude", "value_usd"}
+    if not needed_cols.issubset(data_unique.columns):
+        st.error(f"Faltan columnas en el dataset UNIQUE_LOCATIONS. Se requieren: {needed_cols}")
+        return
+
+    st.sidebar.header("Filtros (Montos)")
+    sectores_disponibles = data_unique['Sector'].dropna().unique()
+    
+    filtro_sector = st.sidebar.selectbox(
+        "Selecciona un sector:",
+        options=sectores_disponibles
+    )
+
+    # Filtrar por sector
+    data_filtrada_loc = data_unique[data_unique['Sector'] == filtro_sector]
+
+    if data_filtrada_loc.empty:
+        st.warning("No se encontraron datos para el sector seleccionado en Montos.")
+        return
+
+    # Mapa basado en Montos -> tamaño proporcional a value_usd
+    fig_map = px.scatter_mapbox(
+        data_filtrada_loc,
+        lat="Latitude",
+        lon="Longitude",
+        color="Sector",
+        size="value_usd",  # tamaño de punto según montos
+        color_discrete_map={filtro_sector: "#ef233c"},
+        hover_name="iatiidentifier",
+        hover_data=["recipientcountry_codename", "Sector", "value_usd"],
+        zoom=3,
+        center={
+            "lat": data_filtrada_loc["Latitude"].mean(),
+            "lon": data_filtrada_loc["Longitude"].mean()
+        },
+        height=600,
+        mapbox_style="carto-darkmatter",
+        title=f"Montos en el Sector: {filtro_sector}"
+    )
+    fig_map.update_layout(
+        margin={"r": 20, "t": 80, "l": 20, "b": 20},
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=1.04,
+            xanchor="right",
+            x=0.99
+        ),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)"
+    )
+
+    # Gráfico de Barras: suma de montos (value_usd) por país
+    montos_por_pais = (
+        data_filtrada_loc
+        .groupby("recipientcountry_codename")["value_usd"]
+        .sum()
+        .reset_index(name="Total USD")
+    )
+    montos_por_pais = montos_por_pais.sort_values(by="Total USD", ascending=True)
+
+    fig_bars = go.Figure()
+    fig_bars.add_trace(
+        go.Bar(
+            x=montos_por_pais["Total USD"],
+            y=montos_por_pais["recipientcountry_codename"],
+            orientation='h',
+            marker_color="#ef233c",
+            text=montos_por_pais["Total USD"],
+            textposition="outside"
+        )
+    )
+    fig_bars.update_layout(
+        title="Sumatoria de Montos (value_usd) por País",
+        xaxis_title="Montos (USD)",
+        yaxis_title=None,
+        height=600,
+        margin=dict(l=20, r=20, t=60, b=20),
+        font_color="#FFFFFF",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)"
+    )
+    fig_bars.update_xaxes(showgrid=False, zeroline=False)
+    fig_bars.update_yaxes(showgrid=False, zeroline=False)
+
+    col_map, col_bar = st.columns([2, 2], gap="medium")
+    with col_map:
+        st.plotly_chart(fig_map, use_container_width=True)
+    with col_bar:
+        st.plotly_chart(fig_bars, use_container_width=True)
+
+
+def geodata():
+    """
+    Página de GeoData en la app Streamlit.
+    Contiene dos subpáginas: 'Frecuencia' y 'Montos'.
+    """
+    st.markdown('<h1 class="title">GeoData</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Explora datos geoespaciales de los proyectos.</p>', unsafe_allow_html=True)
+
+    # Subpáginas internas de GeoData
+    sub_paginas = ["Frecuencia", "Montos"]
+    seleccion_subpagina = st.sidebar.radio("Seleccionar vista GeoData:", sub_paginas)
+
+    if seleccion_subpagina == "Frecuencia":
+        geodata_frecuencia()
+    else:
+        geodata_montos()
 
 # -----------------------------------------------------------------------------
 # PÁGINA 4: ANÁLISIS EXPLORATORIO (PYGWALKER)
@@ -492,21 +624,12 @@ def subpagina_aprobaciones():
         y="value_usd_millones",
         labels={"year": "Año", "value_usd_millones": "Valor (Millones USD)"},
         title="Sumatoria de Value_USD (en millones) por Año",
-        color_discrete_sequence=["#e5e5e5"]  # <-- color #e5e5e5
+        color_discrete_sequence=["#e5e5e5"]  # color
     )
-    # Sin gridlines, fondo transparente
     fig_bar_year.update_layout(
         font_color="#FFFFFF",
-        xaxis=dict(
-            title="Año",
-            showgrid=False,
-            zeroline=False
-        ),
-        yaxis=dict(
-            title="Monto (Millones USD)",
-            showgrid=False,
-            zeroline=False
-        ),
+        xaxis=dict(title="Año", showgrid=False, zeroline=False),
+        yaxis=dict(title="Monto (Millones USD)", showgrid=False, zeroline=False),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=20, r=20, t=60, b=20)
@@ -533,20 +656,12 @@ def subpagina_aprobaciones():
             y="value_usd_millones",
             labels={"Sector": "Sector", "value_usd_millones": "Valor (Millones USD)"},
             title="Sumatoria de Value_USD (en millones) por Sector",
-            color_discrete_sequence=["#e5e5e5"]  # <-- color #e5e5e5
+            color_discrete_sequence=["#e5e5e5"]
         )
         fig_bar_sector.update_layout(
             font_color="#FFFFFF",
-            xaxis=dict(
-                title="Sector",
-                showgrid=False,
-                zeroline=False
-            ),
-            yaxis=dict(
-                title="Monto (Millones USD)",
-                showgrid=False,
-                zeroline=False
-            ),
+            xaxis=dict(title="Sector", showgrid=False, zeroline=False),
+            yaxis=dict(title="Monto (Millones USD)", showgrid=False, zeroline=False),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             margin=dict(l=20, r=20, t=60, b=20)
@@ -554,21 +669,19 @@ def subpagina_aprobaciones():
         st.plotly_chart(fig_bar_sector, use_container_width=True)
 
 def subpagina_desembolsos():
-    """Subpágina para mostrar Desembolsos (disbursements_data.parquet). 
-       Incluye la misma lógica de filtro en millones, color #e5e5e5, 
-       y un segundo gráfico de barras por Sector al marcar 'Tag Sectores'.
-    """
+    """Subpágina para mostrar Desembolsos (disbursements_data.parquet)."""
     st.subheader("Desembolsos (Disbursements Data)")
 
     # 1) Cargamos el DataFrame de desembolsos
     df = DATASETS["DISBURSEMENTS_DATA"].copy()
 
-    # 2) Convertimos la columna de fecha a datetime y extraemos el año
+    # Verificar columnas
     needed_cols = {"transactiondate_isodate", "region", "recipientcountry_codename", "value_usd", "Sector"}
     if not needed_cols.issubset(df.columns):
         st.error(f"Faltan columnas en el dataset de Desembolsos. Se requieren: {needed_cols}")
         return
 
+    # 2) Convertimos la columna de fecha a datetime y extraemos el año
     df["transactiondate_isodate"] = pd.to_datetime(df["transactiondate_isodate"], errors="coerce")
     df["year"] = df["transactiondate_isodate"].dt.year
 
@@ -645,21 +758,12 @@ def subpagina_desembolsos():
         y="value_usd_millones",
         labels={"year": "Año", "value_usd_millones": "Valor (Millones USD)"},
         title="Sumatoria de Value_USD (en millones) por Año - Desembolsos",
-        color_discrete_sequence=["#e5e5e5"]  # <-- color
+        color_discrete_sequence=["#e5e5e5"]
     )
-    # Sin gridlines, fondo transparente
     fig_bar_year.update_layout(
         font_color="#FFFFFF",
-        xaxis=dict(
-            title="Año",
-            showgrid=False,
-            zeroline=False
-        ),
-        yaxis=dict(
-            title="Monto (Millones USD)",
-            showgrid=False,
-            zeroline=False
-        ),
+        xaxis=dict(title="Año", showgrid=False, zeroline=False),
+        yaxis=dict(title="Monto (Millones USD)", showgrid=False, zeroline=False),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=20, r=20, t=60, b=20)
@@ -686,16 +790,8 @@ def subpagina_desembolsos():
         )
         fig_bar_sector.update_layout(
             font_color="#FFFFFF",
-            xaxis=dict(
-                title="Sector",
-                showgrid=False,
-                zeroline=False
-            ),
-            yaxis=dict(
-                title="Monto (Millones USD)",
-                showgrid=False,
-                zeroline=False
-            ),
+            xaxis=dict(title="Sector", showgrid=False, zeroline=False),
+            yaxis=dict(title="Monto (Millones USD)", showgrid=False, zeroline=False),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             margin=dict(l=20, r=20, t=60, b=20)
@@ -722,7 +818,7 @@ def flujos_agregados():
 PAGINAS = {
     "Monitoreo Multilaterales": monitoreo_multilaterales,
     "Cooperaciones Técnicas": cooperaciones_tecnicas,
-    "GeoData": geodata,
+    "GeoData": geodata,  # <<--- Contiene Frecuencia y Montos
     "Análisis Exploratorio": analisis_exploratorio,
     "Flujos Agregados": flujos_agregados
 }
