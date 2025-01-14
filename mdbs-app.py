@@ -29,15 +29,16 @@ country_data = (
 
 country_data["value_usd"] = country_data["value_usd"] / 1e6
 
-# Ajusta w y h a tu preferencia
+
+# 1) Definir el layout con la info del item
 layout = [
     dashboard.Item(
-        i="bar_chart",
+        i="bar_chart",     # identificador
         x=0, 
         y=0, 
         w=8, 
-        h=6, 
-        isDraggable=True, 
+        h=6,
+        isDraggable=True,
         isResizable=True
     )
 ]
@@ -45,14 +46,14 @@ layout = [
 st.title("GeoData Dashboard")
 
 with elements("GeoData"):
-    # Indicamos que se debe arrastrar usando la clase .drag-handle
-    with dashboard.Grid(layout, draggableHandle=".drag-handle"):
+    # 2) Usar ese layout en el Grid
+    with dashboard.Grid(layout=layout, draggableHandle=".drag-handle"):
         
         st.markdown(
             """
-            <div class="drag-handle"
+            <div class="drag-handle" 
                  style="cursor: move; 
-                        background-color: #444444;
+                        background-color: #444444; 
                         color: white;
                         padding: 8px; 
                         margin-bottom: 5px; 
@@ -62,8 +63,8 @@ with elements("GeoData"):
             """,
             unsafe_allow_html=True
         )
-
-        # Aquí se asocia el mismo id "bar_chart" definido en layout (i="bar_chart")
+        
+        # 3) Simplemente usamos el mismo id "bar_chart"
         with dashboard.Item("bar_chart"):
             nivo.Bar(
                 data=country_data.to_dict("records"),
