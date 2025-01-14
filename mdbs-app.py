@@ -85,4 +85,4 @@ with elements("drag_resize_demo"):
                             }
                         }
                     }
-                )
+                )  # Paréntesis de cierre agregado aquí
