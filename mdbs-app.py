@@ -1,169 +1,77 @@
 import streamlit as st
-from streamlit_elements import elements, mui, html
-import plotly.express as px
 import pandas as pd
+from streamlit_elements import elements, dashboard, nivo
 
-def app_monitoreo():
-    st.title("Monitoreo Multilaterales")
-    st.write("Bienvenido a la página principal de **Monitoreo Multilaterales**.")
+# Cargar los datos desde el archivo Parquet
+@st.cache_data
+def load_data():
+    return pd.read_parquet("unique_locations.parquet")
 
-    with elements("monitoreo"):
-        with mui.Card(sx={"padding": "16px", "marginTop": "16px"}):
-            mui.Typography("Contenido específico para Monitoreo Multilaterales", variant="body1")
+data = load_data()
 
+# Sidebar para el filtro de Sector
+sector_filter = st.sidebar.selectbox(
+    "Selecciona un Sector", 
+    options=["Todos"] + sorted(data["Sector"].dropna().unique().tolist())
+)
 
-def app_geodata():
-    st.title("GeoData")
-    st.write("Aquí podrás visualizar y analizar datos geoespaciales.")
+# Filtrar los datos según el sector seleccionado
+if sector_filter != "Todos":
+    filtered_data = data[data["Sector"] == sector_filter]
+else:
+    filtered_data = data
 
-    # Submenú interno de GeoData
-    subpagina = st.sidebar.selectbox("Subpágina de GeoData", ["Principal", "Montos"])
+# Agrupar por país y calcular el acumulado
+country_data = (
+    filtered_data.groupby("recipientcountry_codename")["value_usd"]
+    .sum()
+    .reset_index()
+    .sort_values(by="value_usd", ascending=False)
+)
 
-    if subpagina == "Principal":
-        # Vista principal de GeoData
-        with elements("geodata"):
-            with mui.Card(sx={"padding": "16px", "marginTop": "16px"}):
-                mui.Typography("Contenido específico para GeoData", variant="body1")
+# Crear el layout para el dashboard
+layout = [dashboard.Item("bar_chart", 0, 0, 6, 4)]
 
-    elif subpagina == "Montos":
-        st.subheader("Visualización de montos")
+# Página principal
+st.title("GeoData Dashboard")
 
-        # Filtro por Sector
-        sector_filtrado = st.selectbox("Selecciona el Sector", ["Todos", "Salud", "Educación", "Infraestructura"])
-
-        # Datos de ejemplo con point_pos = "lat,long"
-        data = [
-            {
-                "id": 1,
-                "point_pos": "19.4326,-99.1332",  # CDMX
-                "value_usd": 1000,
-                "recipientcountry_codename": "MEX",
-                "Sector": "Salud"
+with elements("GeoData"):
+    with dashboard.Grid(layout):
+        nivo.Bar(
+            data=country_data.to_dict("records"),
+            keys=["value_usd"],
+            indexBy="recipientcountry_codename",
+            margin={"top": 50, "right": 50, "bottom": 100, "left": 80},
+            padding=0.3,
+            groupMode="grouped",
+            layout="horizontal",
+            colors={"scheme": "nivo"},
+            axisBottom={
+                "tickSize": 5,
+                "tickPadding": 5,
+                "tickRotation": 45,
+                "legend": "Valor Acumulado (USD)",
+                "legendPosition": "middle",
+                "legendOffset": 50,
             },
-            {
-                "id": 2,
-                "point_pos": "40.7128,-74.0060",  # NYC
-                "value_usd": 2000,
-                "recipientcountry_codename": "USA",
-                "Sector": "Educación"
+            axisLeft={
+                "tickSize": 5,
+                "tickPadding": 5,
+                "tickRotation": 0,
+                "legend": "País",
+                "legendPosition": "middle",
+                "legendOffset": -70,
             },
-            {
-                "id": 3,
-                "point_pos": "48.8566,2.3522",    # París
-                "value_usd": 1500,
-                "recipientcountry_codename": "FRA",
-                "Sector": "Salud"
-            },
-            {
-                "id": 4,
-                "point_pos": "34.0522,-118.2437", # Los Ángeles
-                "value_usd": 3000,
-                "recipientcountry_codename": "USA",
-                "Sector": "Infraestructura"
-            }
-        ]
-
-        # Aplicamos filtro
-        if sector_filtrado != "Todos":
-            data = [d for d in data if d["Sector"] == sector_filtrado]
-
-        # Convertimos data a DataFrame para Plotly
-        df = pd.DataFrame(data)
-
-        # Separar lat/long de la columna 'point_pos'
-        lat_vals, lon_vals = [], []
-        for pos in df["point_pos"]:
-            lat_str, lon_str = pos.split(",")
-            lat_vals.append(float(lat_str))
-            lon_vals.append(float(lon_str))
-
-        df["lat"] = lat_vals
-        df["lon"] = lon_vals
-
-        # ----------------------------
-        # Generar la figura del mapa
-        # ----------------------------
-        fig_map = px.scatter_geo(
-            df,
-            lat="lat",
-            lon="lon",
-            color="Sector",           # Colorear por Sector
-            size="value_usd",         # Tamaño según value_usd
-            hover_name="recipientcountry_codename",
-            projection="natural earth",
-            title="Mapa de Puntos (Plotly)",
+            enableLabel=True,
+            legends=[
+                {
+                    "dataFrom": "keys",
+                    "anchor": "bottom-right",
+                    "direction": "column",
+                    "translateX": 120,
+                    "itemWidth": 100,
+                    "itemHeight": 20,
+                    "symbolSize": 20,
+                }
+            ],
         )
-        fig_map.update_layout(height=400, margin={"r":0,"t":40,"l":0,"b":0})
-
-        # ------------------------------
-        # Generar la figura de barras
-        # ------------------------------
-        # Agrupamos value_usd por recipientcountry_codename
-        agg_data = df.groupby("recipientcountry_codename")["value_usd"].sum().reset_index()
-
-        fig_bar = px.bar(
-            agg_data,
-            x="value_usd",
-            y="recipientcountry_codename",
-            orientation="h",
-            color="recipientcountry_codename",
-            title="Gráfico de Barras Horizontal (Plotly)",
-        )
-        fig_bar.update_layout(height=400, margin={"r":0,"t":40,"l":0,"b":0})
-
-        # ------------------------------
-        # Convertimos las figuras a HTML
-        # ------------------------------
-        # Usamos include_plotlyjs="cdn" para que cargue la librería de Plotly desde la CDN.
-        fig_map_html = fig_map.to_html(full_html=False, include_plotlyjs="cdn")
-        fig_bar_html = fig_bar.to_html(full_html=False, include_plotlyjs="cdn")
-
-        # Renderizamos con streamlit-elements
-        with elements("montos"):
-            # ----- MAPA DE PUNTOS -----
-            with mui.Card(sx={"padding": "16px", "marginTop": "16px"}):
-                mui.Typography("Mapa de Puntos con Plotly", variant="h6")
-
-                # IMPORTANTE: usar html.Html() en lugar de html.html()
-                html.Html(
-                    content=fig_map_html,
-                    style={"height": "400px", "width": "100%"}
-                )
-
-            # ----- BARRAS HORIZONTAL -----
-            with mui.Card(sx={"padding": "16px", "marginTop": "16px"}):
-                mui.Typography("Gráfico de Barras Horizontal con Plotly", variant="h6")
-
-                html.Html(
-                    content=fig_bar_html,
-                    style={"height": "400px", "width": "100%"}
-                )
-
-
-def app_flujos():
-    st.title("Flujos Agregados")
-    st.write("Aquí se mostrarán los datos de flujos agregados.")
-
-    with elements("flujos"):
-        with mui.Card(sx={"padding": "16px", "marginTop": "16px"}):
-            mui.Typography("Contenido específico para Flujos Agregados", variant="body1")
-
-
-def main():
-    st.set_page_config(page_title="Monitoreo Multilaterales", layout="wide")
-
-    st.sidebar.title("Navegación")
-    opcion = st.sidebar.selectbox(
-        "Selecciona una sección:",
-        ("Monitoreo Multilaterales", "GeoData", "Flujos Agregados")
-    )
-
-    if opcion == "Monitoreo Multilaterales":
-        app_monitoreo()
-    elif opcion == "GeoData":
-        app_geodata()
-    elif opcion == "Flujos Agregados":
-        app_flujos()
-
-if __name__ == "__main__":
-    main()
