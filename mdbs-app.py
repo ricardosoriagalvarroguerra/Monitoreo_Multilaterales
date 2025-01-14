@@ -33,17 +33,17 @@ country_data = (
 country_data["value_usd"] = country_data["value_usd"] / 1e6
 
 # Crear el layout para el dashboard
-layout = [dashboard.Item("bar_chart", 0, 0, 6, 4)]  # Tamaño reducido
+layout = [dashboard.Item("bar_chart", 0, 0, 6, 2)]  # Reducido en largo y ancho
 
 # Página principal
 st.title("GeoData Dashboard")
 
 with elements("GeoData"):
-    # Aplicar estilos para un contenedor con tamaño reducido y sin fondo
+    # Aplicar estilos para un contenedor más pequeño y con color blanco en los ejes
     with mui.Box(
         sx={
-            "width": "100%",
-            "height": 300,  # Altura más pequeña
+            "width": "50%",  # Reducir el ancho
+            "height": 300,  # Reducir la altura
             "display": "flex",
             "alignItems": "center",
             "justifyContent": "center",
@@ -53,7 +53,7 @@ with elements("GeoData"):
             data=country_data.to_dict("records"),
             keys=["value_usd"],
             indexBy="recipientcountry_codename",
-            margin={"top": 30, "right": 100, "bottom": 100, "left": 100},
+            margin={"top": 30, "right": 50, "bottom": 70, "left": 100},
             padding=0.3,
             layout="horizontal",
             colors={"scheme": "nivo"},
@@ -63,7 +63,8 @@ with elements("GeoData"):
                 "tickRotation": 45,
                 "legend": "Valor Acumulado (Millones USD)",
                 "legendPosition": "middle",
-                "legendOffset": 50,
+                "legendOffset": 40,
+                "tickColor": "#FFFFFF",  # Color blanco para los ticks
             },
             axisLeft={
                 "tickSize": 5,
@@ -72,6 +73,7 @@ with elements("GeoData"):
                 "legend": "País",
                 "legendPosition": "middle",
                 "legendOffset": -70,
+                "tickColor": "#FFFFFF",  # Color blanco para los ticks
             },
             enableLabel=True,
             labelSkipWidth=12,
@@ -88,11 +90,11 @@ with elements("GeoData"):
                 }
             ],
             theme={
-                "textColor": "#31333F",  # Sin fondo
+                "textColor": "#FFFFFF",  # Texto en color blanco
                 "tooltip": {
                     "container": {
-                        "background": "#FFFFFF",
-                        "color": "#31333F",
+                        "background": "#333333",
+                        "color": "#FFFFFF",  # Texto del tooltip en blanco
                     }
                 }
             },
