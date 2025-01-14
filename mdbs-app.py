@@ -1,6 +1,7 @@
 import streamlit as st
 from streamlit_elements import elements, mui, html
 import plotly.express as px
+import pandas as pd
 import json
 from collections import defaultdict
 
@@ -68,13 +69,11 @@ def app_geodata():
         if sector_filtrado != "Todos":
             data = [d for d in data if d["Sector"] == sector_filtrado]
 
-        # Preparamos listas para lat, lon a partir de point_pos
-        # Creamos un DataFrame para manejarlo más cómodo con Plotly
-        import pandas as pd
+        # Convertimos data a DataFrame para Plotly
         df = pd.DataFrame(data)
-        # Separar lat/long
-        lat_vals = []
-        lon_vals = []
+
+        # Separar lat/long de la columna 'point_pos'
+        lat_vals, lon_vals = [], []
         for pos in df["point_pos"]:
             lat_str, lon_str = pos.split(",")
             lat_vals.append(float(lat_str))
@@ -86,30 +85,24 @@ def app_geodata():
         # ----------------------------
         # Generar la figura del mapa
         # ----------------------------
-        # Opción 1: scatter_geo (no requiere token de Mapbox)
-        # Opción 2: scatter_mapbox (requiere tu Mapbox token)
-        # Usamos scatter_geo en este ejemplo
         fig_map = px.scatter_geo(
             df,
             lat="lat",
             lon="lon",
-            color="Sector",         # Para colorear por sector
-            size="value_usd",       # El tamaño depende de value_usd
+            color="Sector",           # Colorear por Sector
+            size="value_usd",         # Tamaño según value_usd
             hover_name="recipientcountry_codename",
             projection="natural earth",
             title="Mapa de Puntos (Plotly)",
         )
-
-        # Ajustar layout, si se desea
         fig_map.update_layout(height=400, margin={"r":0,"t":40,"l":0,"b":0})
 
         # ------------------------------
         # Generar la figura de barras
         # ------------------------------
-        # Agrupamos el valor total por recipientcountry_codename
+        # Agrupamos value_usd por recipientcountry_codename
         agg_data = df.groupby("recipientcountry_codename")["value_usd"].sum().reset_index()
 
-        # Hacemos un bar chart horizontal
         fig_bar = px.bar(
             agg_data,
             x="value_usd",
@@ -120,21 +113,22 @@ def app_geodata():
         )
         fig_bar.update_layout(height=400, margin={"r":0,"t":40,"l":0,"b":0})
 
-        # Creamos las versiones HTML de las figuras
+        # Convertimos las figuras a HTML
         fig_map_html = fig_map.to_html(full_html=False)
         fig_bar_html = fig_bar.to_html(full_html=False)
 
         with elements("montos"):
-            # ---- MAPA DE PUNTOS EN UN CARD ----
+            # ----- MAPA DE PUNTOS -----
             with mui.Card(sx={"padding": "16px", "marginTop": "16px"}):
                 mui.Typography("Mapa de Puntos con Plotly", variant="h6")
-                # Inyectamos el HTML del gráfico Plotly dentro del Card
-                html.html(fig_map_html)
+                # Importante: scripts=True para que se ejecute el JS de Plotly
+                html.html(fig_map_html, scripts=True, height="400px")
 
-            # ---- GRÁFICO DE BARRAS HORIZONTAL ----
+            # ----- BARRAS HORIZONTAL -----
             with mui.Card(sx={"padding": "16px", "marginTop": "16px"}):
                 mui.Typography("Gráfico de Barras Horizontal con Plotly", variant="h6")
-                html.html(fig_bar_html)
+                # Igual, scripts=True
+                html.html(fig_bar_html, scripts=True, height="400px")
 
 
 def app_flujos():
