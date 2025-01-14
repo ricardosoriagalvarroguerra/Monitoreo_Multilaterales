@@ -137,19 +137,20 @@ def cooperaciones_tecnicas():
     filtro_pais = st.sidebar.multiselect(
         "Selecciona uno o varios países (o General para todos):",
         options=paises_disponibles,
-        default=["General"]
+        default=["General"]  # Por defecto: "General"
     )
     
     rango_anios = st.sidebar.slider(
         "Selecciona el rango de años:",
         2000,
         2024,
-        (2000, 2024)
+        (2000, 2024)  # Cobertura total por defecto
     )
     
     # Filtrar por año
     data = data[(data["Year"] >= 2000) & (data["Year"] <= 2024)]
 
+    # Filtrar por Tipo de Proyecto
     if "General" not in filtro_pais:
         data_tc = data[
             (data["Project Type"] == "Technical Cooperation")
@@ -225,6 +226,7 @@ def cooperaciones_tecnicas():
     if "General" not in filtro_pais:
         resumen_anual_tc = data_tc.groupby(["Year"])["Approval Amount"].sum().reset_index()
     else:
+        # Cuando es "General", data_tc ya viene agrupado solo por Year
         resumen_anual_tc = data_tc
 
     porcentaje_tc = resumen_anual_tc.merge(
@@ -295,6 +297,11 @@ def geodata():
 
     st.sidebar.header("Filtros (Mapa y Barras)")
     sectores_disponibles = data_location['Sector'].dropna().unique()
+    
+    # Por defecto, no hay un "General", así que seleccionamos el primer sector o todo.
+    # Pero si tu intención es mostrar todo, ajusta la lógica: 
+    # con un selectbox no se puede seleccionar "todos" de una sola vez, 
+    # a menos que lo manejes con un 'multiselect'.
     filtro_sector = st.sidebar.selectbox(
         "Selecciona un sector:",
         options=sectores_disponibles
@@ -419,39 +426,41 @@ def subpagina_aprobaciones():
 
     # 3.1) Filtro de Región
     regiones_disponibles = sorted(df["region"].dropna().unique())
+    # Por defecto, todas las regiones
     region_seleccionada = st.sidebar.multiselect(
         "Selecciona región(es):",
         options=regiones_disponibles,
-        default=regiones_disponibles  # por defecto, todas
+        default=regiones_disponibles  # por defecto, TODAS
     )
     df = df[df["region"].isin(region_seleccionada)]
 
     # 3.2) Filtro de País
     paises_disponibles = sorted(df["recipientcountry_codename"].dropna().unique())
+    # Por defecto, todos los países
     paises_seleccionados = st.sidebar.multiselect(
         "Selecciona país(es):",
         options=paises_disponibles,
-        default=paises_disponibles
+        default=paises_disponibles  # por defecto, TODOS
     )
     df = df[df["recipientcountry_codename"].isin(paises_seleccionados)]
 
-    # 3.3) Filtro de rango de años
+    # 3.3) Filtro de rango de años (por defecto, min y max del dataset)
     anio_min, anio_max = int(df["year"].min()), int(df["year"].max())
     rango_anios = st.sidebar.slider(
         "Rango de años:",
         min_value=anio_min,
         max_value=anio_max,
-        value=(anio_min, anio_max)
+        value=(anio_min, anio_max)  # default: todo el rango
     )
     df = df[(df["year"] >= rango_anios[0]) & (df["year"] <= rango_anios[1])]
 
-    # 3.4) Filtro de rangos de montos (value_usd)
+    # 3.4) Filtro de rangos de montos (value_usd) - por defecto, min y max
     monto_min, monto_max = float(df["value_usd"].min()), float(df["value_usd"].max())
     rango_montos = st.sidebar.slider(
         "Rango de montos (USD):",
         min_value=monto_min,
         max_value=monto_max,
-        value=(monto_min, monto_max)
+        value=(monto_min, monto_max)  # default: todo el rango
     )
     df = df[(df["value_usd"] >= rango_montos[0]) & (df["value_usd"] <= rango_montos[1])]
 
@@ -488,7 +497,7 @@ def subpagina_aprobaciones():
 
 def subpagina_desembolsos():
     """Subpágina para mostrar Desembolsos (disbursements_data.parquet). 
-       (Ejemplo simple, puedes personalizar igual que Aprobaciones)
+       Configurado de forma similar a Aprobaciones, con filtros por defecto = TODO.
     """
     st.subheader("Desembolsos (Disbursements Data)")
 
@@ -502,8 +511,7 @@ def subpagina_desembolsos():
     df["transactiondate_isodate"] = pd.to_datetime(df["transactiondate_isodate"], errors="coerce")
     df["year"] = df["transactiondate_isodate"].dt.year
 
-    # Validar si existen las mismas columnas (region, recipientcountry_codename, value_usd) 
-    # o modificar acorde a tu dataset real
+    # Validar columnas (region, recipientcountry_codename, value_usd)
     if "region" not in df.columns:
         st.error("No se encontró la columna 'region' en el dataset de Desembolsos.")
         return
@@ -517,7 +525,7 @@ def subpagina_desembolsos():
     # 3) Filtros en la barra lateral
     st.sidebar.header("Filtros - Desembolsos")
 
-    # (Ejemplo rápido, similar a Aprobaciones)
+    # Por defecto, todas las regiones
     regiones_disponibles = sorted(df["region"].dropna().unique())
     region_seleccionada = st.sidebar.multiselect(
         "Selecciona región(es):",
@@ -526,6 +534,7 @@ def subpagina_desembolsos():
     )
     df = df[df["region"].isin(region_seleccionada)]
 
+    # Por defecto, todos los países
     paises_disponibles = sorted(df["recipientcountry_codename"].dropna().unique())
     paises_seleccionados = st.sidebar.multiselect(
         "Selecciona país(es):",
@@ -534,6 +543,7 @@ def subpagina_desembolsos():
     )
     df = df[df["recipientcountry_codename"].isin(paises_seleccionados)]
 
+    # Por defecto, todo el rango de años
     anio_min, anio_max = int(df["year"].min()), int(df["year"].max())
     rango_anios = st.sidebar.slider(
         "Rango de años:",
@@ -543,6 +553,7 @@ def subpagina_desembolsos():
     )
     df = df[(df["year"] >= rango_anios[0]) & (df["year"] <= rango_anios[1])]
 
+    # Por defecto, todo el rango de montos
     monto_min, monto_max = float(df["value_usd"].min()), float(df["value_usd"].max())
     rango_montos = st.sidebar.slider(
         "Rango de montos (USD):",
@@ -611,6 +622,8 @@ PAGINAS = {
 def main():
     st.sidebar.title("Navegación")
     opciones = list(PAGINAS.keys())
+    # El index=0 mostrará por defecto la primera página ("Monitoreo Multilaterales"),
+    # Si quieres que "Flujos Agregados" sea la primera, cambia el orden o ajusta index.
     seleccion = st.sidebar.selectbox("Ir a:", opciones, index=0)
     PAGINAS[seleccion]()
 
