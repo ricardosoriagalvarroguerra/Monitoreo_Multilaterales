@@ -1,79 +1,61 @@
 import streamlit as st
+import pandas as pd
 import json
 from uuid import uuid4
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 
-# Importaciones de streamlit-elements
+# streamlit-elements
 from streamlit_elements import elements, dashboard, mui, nivo
 
 
 ###############################################################################
-# 1. DASHBOARD
+# DASHBOARD
 ###############################################################################
 class Dashboard:
     """
-    Dashboard principal para manejar el layout de items arrastrables.
-    Usa la clase interna 'Item' como base para elementos concretos (Card, Pie, etc.).
+    Maneja un grid arrastrable y redimensionable. Cada elemento (Item) se registra
+    en un layout que se pasa a dashboard.Grid().
     """
 
-    DRAGGABLE_CLASS = "draggable"  # Clase CSS para el handle de arrastre
+    DRAGGABLE_CLASS = "draggable"
 
     def __init__(self):
-        self._layout = []  # Guarda el layout de cada item
+        self._layout = []
 
     def _register(self, item):
-        """
-        Registra cada item (Card, Pie, etc.) en el layout.
-        """
         self._layout.append(item)
 
     @contextmanager
     def __call__(self, **props):
-        """
-        Permite usar 'with board(...)' para crear un dashboard.Grid
-        con las propiedades deseadas.
-        """
-        # Indicamos que la clase arrastrable será .draggable
+        # Le decimos a dashboard.Grid que .draggable es nuestra "manija" de arrastre.
         props["draggableHandle"] = f".{Dashboard.DRAGGABLE_CLASS}"
-
         with dashboard.Grid(self._layout, **props):
             yield
 
-    # -------------------------------------------------------------------------
-    # Clase interna 'Item' que servirá como base para Card, Pie, etc.
-    # -------------------------------------------------------------------------
     class Item(ABC):
+        """
+        Clase base para cada elemento (gráfico, tarjeta, etc.) dentro del Dashboard.
+        """
         def __init__(self, board, x, y, w, h, **item_props):
-            """
-            :param board: Instancia de Dashboard.
-            :param x, y: Posición inicial en el Grid (en celdas).
-            :param w, h: Tamaño en celdas.
-            :param item_props: Extras (isDraggable, isResizable, etc.).
-            """
-            # Identificador único para el item
-            self._key = str(uuid4())
-            # Clase CSS para arrastre
+            self._key = str(uuid4())               # Identificador único
             self._draggable_class = Dashboard.DRAGGABLE_CLASS
-            # Modo oscuro o claro
-            self._dark_mode = True
+            self._dark_mode = True                # Bandera para modo oscuro/claro
 
-            # Registramos este item en el Dashboard
+            # Registra este item en el tablero
             board._register(
                 dashboard.Item(self._key, x, y, w, h, **item_props)
             )
 
         def _switch_theme(self):
-            """
-            Cambia de modo oscuro a claro, o viceversa.
-            """
+            """ Alterna modo oscuro / claro. """
             self._dark_mode = not self._dark_mode
 
         @contextmanager
         def title_bar(self, padding="5px 15px 5px 15px", dark_switcher=True):
             """
-            Crea una barra horizontal (Stack) que sirve como zona arrastrable
-            si incluye la clase self._draggable_class.
+            Crea un encabezado (Stack) que sirve de "barra" arrastrable si
+            asignamos la clase self._draggable_class.
             """
             with mui.Stack(
                 className=self._draggable_class,
@@ -86,10 +68,10 @@ class Dashboard:
                     "borderColor": "divider",
                 },
             ):
-                # Contenido que añada el desarrollador
+                # Aquí puede ir texto, iconos, etc.
                 yield
 
-                # Botón para alternar modo oscuro/claro
+                # Icono para alternar tema (opcional)
                 if dark_switcher:
                     if self._dark_mode:
                         mui.IconButton(mui.icon.DarkMode, onClick=self._switch_theme)
@@ -98,94 +80,22 @@ class Dashboard:
 
         @abstractmethod
         def __call__(self, *args, **kwargs):
-            """
-            Método que debe implementar cada subclase para renderizarse.
-            """
+            """ Cada subclase define cómo se renderiza. """
             raise NotImplementedError
 
 
 ###############################################################################
-# 2. CARD
+# HORIZONTAL BAR CHART
 ###############################################################################
-class Card(Dashboard.Item):
+class HorizontalBar(Dashboard.Item):
     """
-    Ejemplo de tarjeta con header, imagen, contenido y acciones.
+    Genera un gráfico de barras horizontal usando Nivo. Filtra por 'Sector' en Streamlit
+    y agrupa por 'recipientcountry_codename', sumando 'value_usd'.
     """
-
-    DEFAULT_CONTENT = (
-        "This impressive paella is a perfect party dish and a fun meal to cook "
-        "together with your guests. Add 1 cup of frozen peas along with the mussels, "
-        "if you like."
-    )
-
-    def __call__(self, content):
-        """
-        Renderiza la tarjeta con:
-          - CardHeader
-          - CardMedia (imagen)
-          - CardContent (texto)
-          - CardActions (íconos de acción)
-        """
-        if not content:
-            content = self.DEFAULT_CONTENT
-
-        with mui.Card(
-            key=self._key,
-            sx={
-                "display": "flex",
-                "flexDirection": "column",
-                "borderRadius": 3,
-                "overflow": "hidden"
-            },
-            elevation=1
-        ):
-            # Encabezado de la tarjeta con subheader e ícono
-            mui.CardHeader(
-                title="Shrimp and Chorizo Paella",
-                subheader="September 14, 2016",
-                avatar=mui.Avatar("R", sx={"bgcolor": "red"}),
-                action=mui.IconButton(mui.icon.MoreVert),
-                # className define la zona arrastrable
-                className=self._draggable_class
-            )
-
-            # Imagen
-            mui.CardMedia(
-                component="img",
-                height=194,
-                image="https://mui.com/static/images/cards/paella.jpg",
-                alt="Paella dish"
-            )
-
-            # Contenido
-            with mui.CardContent(sx={"flex": 1}):
-                mui.Typography(content)
-
-            # Acciones (iconos)
-            with mui.CardActions(disableSpacing=True):
-                mui.IconButton(mui.icon.Favorite)
-                mui.IconButton(mui.icon.Share)
-
-
-###############################################################################
-# 3. PIE CHART
-###############################################################################
-class Pie(Dashboard.Item):
-    """
-    Gráfico de pastel (Pie chart) usando Nivo, con soporte para modo oscuro/claro.
-    """
-
-    DEFAULT_DATA = [
-        { "id": "java",   "label": "java",   "value": 465, "color": "hsl(128, 70%, 50%)" },
-        { "id": "rust",   "label": "rust",   "value": 140, "color": "hsl(178, 70%, 50%)" },
-        { "id": "scala",  "label": "scala",  "value":  40, "color": "hsl(322, 70%, 50%)" },
-        { "id": "ruby",   "label": "ruby",   "value": 439, "color": "hsl(117, 70%, 50%)" },
-        { "id": "elixir", "label": "elixir", "value": 366, "color": "hsl(286, 70%, 50%)" }
-    ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Definimos temas para modo oscuro y claro
+        # Definimos temas para modo oscuro / claro
         self._theme = {
             "dark": {
                 "background": "#252526",
@@ -209,16 +119,11 @@ class Pie(Dashboard.Item):
             }
         }
 
-    def __call__(self, json_data):
+    def __call__(self, data_dict):
         """
-        Recibe un string JSON y lo parsea para renderizar el Pie chart.
+        :param data_dict: Lista de diccionarios con campos:
+            { "recipientcountry_codename": "...", "value_usd": ... }
         """
-        try:
-            data = json.loads(json_data)
-        except json.JSONDecodeError:
-            data = self.DEFAULT_DATA
-
-        # Paper: contenedor con fondo y borde redondeado
         with mui.Paper(
             key=self._key,
             sx={
@@ -229,85 +134,65 @@ class Pie(Dashboard.Item):
             },
             elevation=1
         ):
-            # Usamos la barra de título para tener la clase arrastrable
+            # Barra de título arrastrable
             with self.title_bar():
-                mui.icon.PieChart()
-                mui.Typography("Pie chart", sx={"flex": 1})
+                mui.icon.BarChart()
+                mui.Typography("Horizontal Bar Chart", sx={"flex": 1})
 
             # Contenedor principal para el gráfico
-            with mui.Box(sx={"flex": 1, "minHeight": 0}):
-                nivo.Pie(
-                    data=data,
+            with mui.Box(sx={"flex": 1, "minHeight": 0, "padding": "10px"}):
+                # Renderizamos la gráfica con Nivo
+                # - 'layout="horizontal"' para barras horizontales
+                # - 'keys=["value_usd"]' define la(s) serie(s) a graficar
+                # - 'indexBy="recipientcountry_codename"' define la categoría (Y axis)
+                nivo.Bar(
+                    data=data_dict,
+                    keys=["value_usd"],
+                    indexBy="recipientcountry_codename",
+                    layout="horizontal",
                     theme=self._theme["dark" if self._dark_mode else "light"],
-                    margin={"top": 40, "right": 80, "bottom": 80, "left": 80},
-                    innerRadius=0.5,
-                    padAngle=0.7,
-                    cornerRadius=3,
-                    activeOuterRadiusOffset=8,
-                    borderWidth=1,
-                    borderColor={
-                        "from": "color",
-                        "modifiers": [["darker", 0.2]]
+                    margin={"top": 40, "right": 50, "bottom": 50, "left": 160},
+                    padding=0.3,
+                    valueScale={"type": "linear"},
+                    indexScale={"type": "band", "round": True},
+                    colors={"scheme": "nivo"},
+                    axisLeft={
+                        "tickSize": 5,
+                        "tickPadding": 5,
+                        "tickRotation": 0,
+                        "legend": "recipientcountry_codename",
+                        "legendPosition": "middle",
+                        "legendOffset": -100
                     },
-                    arcLinkLabelsSkipAngle=10,
-                    arcLinkLabelsTextColor="grey",
-                    arcLinkLabelsThickness=2,
-                    arcLinkLabelsColor={ "from": "color" },
-                    arcLabelsSkipAngle=10,
-                    arcLabelsTextColor={
-                        "from": "color",
-                        "modifiers": [["darker", 2]]
+                    axisBottom={
+                        "tickSize": 5,
+                        "tickPadding": 5,
+                        "tickRotation": 0,
+                        "legend": "value_usd",
+                        "legendPosition": "middle",
+                        "legendOffset": 40
                     },
-                    defs=[
-                        {
-                            "id": "dots",
-                            "type": "patternDots",
-                            "background": "inherit",
-                            "color": "rgba(255, 255, 255, 0.3)",
-                            "size": 4,
-                            "padding": 1,
-                            "stagger": True
-                        },
-                        {
-                            "id": "lines",
-                            "type": "patternLines",
-                            "background": "inherit",
-                            "color": "rgba(255, 255, 255, 0.3)",
-                            "rotation": -45,
-                            "lineWidth": 6,
-                            "spacing": 10
-                        }
-                    ],
-                    fill=[
-                        { "match": { "id": "ruby" },   "id": "dots" },
-                        { "match": { "id": "c" },      "id": "dots" },
-                        { "match": { "id": "go" },     "id": "dots" },
-                        { "match": { "id": "python" }, "id": "dots" },
-                        { "match": { "id": "scala" },  "id": "lines" },
-                        { "match": { "id": "lisp" },   "id": "lines" },
-                        { "match": { "id": "elixir" }, "id": "lines" },
-                        { "match": { "id": "javascript" }, "id": "lines" }
-                    ],
+                    enableLabel=True,
+                    labelSkipWidth=12,
+                    labelSkipHeight=12,
+                    labelTextColor={"from": "color", "modifiers": [["darker", 1.6]]},
                     legends=[
                         {
-                            "anchor": "bottom",
-                            "direction": "row",
+                            "dataFrom": "keys",
+                            "anchor": "bottom-right",
+                            "direction": "column",
                             "justify": False,
-                            "translateX": 0,
-                            "translateY": 56,
-                            "itemsSpacing": 0,
+                            "translateX": 120,
+                            "translateY": 0,
+                            "itemsSpacing": 2,
                             "itemWidth": 100,
-                            "itemHeight": 18,
-                            "itemTextColor": "#999",
-                            "itemDirection": "left-to-right",
-                            "itemOpacity": 1,
-                            "symbolSize": 18,
-                            "symbolShape": "circle",
+                            "itemHeight": 20,
+                            "symbolSize": 20,
                             "effects": [
                                 {
                                     "on": "hover",
                                     "style": {
-                                        "itemTextColor": "#000"
+                                        "itemOpacity": 1
                                     }
                                 }
                             ]
@@ -317,29 +202,48 @@ class Pie(Dashboard.Item):
 
 
 ###############################################################################
-# 4. MAIN APP
+# MAIN
 ###############################################################################
 def main():
     st.set_page_config(layout="wide")
-    st.title("Ejemplo unificado: Dashboard, Card y Pie Chart en un solo archivo")
+    st.title("Horizontal Bar Chart con Filtro de 'Sector'")
 
-    # 1) Creamos el dashboard
+    # 1) Cargar dataset
+    df = pd.read_parquet("unique_locations.parquet")
+
+    # 2) Crear un filtro de Sector
+    sector_list = df["Sector"].dropna().unique().tolist()
+    selected_sectors = st.multiselect("Filtrar por Sector:", sector_list, default=sector_list)
+
+    # 3) Filtrar el DataFrame
+    df_filtered = df[df["Sector"].isin(selected_sectors)]
+
+    # 4) Agrupar por país y sumar value_usd
+    df_grouped = df_filtered.groupby("recipientcountry_codename", as_index=False)["value_usd"].sum()
+
+    # 5) Convertir a lista de diccionarios (para nivo.Bar)
+    bar_data = df_grouped.to_dict(orient="records")
+
+    # 6) Crear el dashboard
     board = Dashboard()
 
-    # 2) Instanciamos un Card y un Pie chart
-    card_item = Card(board, x=0, y=0, w=4, h=5, isDraggable=True, isResizable=True)
-    pie_item = Pie(board, x=4, y=0, w=4, h=5, isDraggable=True, isResizable=True)
+    # 7) Instanciar nuestro HorizontalBar
+    bar_item = HorizontalBar(board, x=0, y=0, w=6, h=5, isDraggable=True, isResizable=True)
 
-    # 3) Renderizamos con elements
-    with elements("demo"):
-        # Abrimos el dashboard (Grid), el "with board()" usa la clase .draggable
+    # 8) Renderizar con streamlit_elements
+    with elements("demo_dashboard"):
+        # Abrimos el Dashboard
         with board():
-            # Mostramos la Card con algún contenido
-            card_item("¡Hola! Este es el contenido de mi Card.")
+            bar_item(bar_data)
 
-            # Mostramos el Pie con datos por defecto (convertidos a JSON)
-            data_json = json.dumps(pie_item.DEFAULT_DATA)
-            pie_item(data_json)
+    # 9) CSS para ver el cursor de arrastre
+    st.markdown("""
+        <style>
+        .draggable {
+            cursor: move;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
