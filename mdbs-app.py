@@ -29,13 +29,13 @@ df = pd.DataFrame([
 dashboard_layout = [
     dashboard.Item(
         i="pie_chart",
-        x=0, y=0, w=4, h=4,  # Ajusta según te guste
+        x=2, y=3, w=4, h=4,  # Ajusta según te guste
         isDraggable=True,
         isResizable=True
     ),
     dashboard.Item(
         i="data_grid",
-        x=4, y=0, w=4, h=4,  # Ajusta según te guste
+        x=4, y=1, w=4, h=4,  # Ajusta según te guste
         isDraggable=True,
         isResizable=True
     ),
