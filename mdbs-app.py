@@ -8,16 +8,10 @@ from contextlib import contextmanager
 # streamlit-elements
 from streamlit_elements import elements, dashboard, mui, nivo
 
-
 ###############################################################################
-# DASHBOARD
+# 1. DASHBOARD
 ###############################################################################
 class Dashboard:
-    """
-    Maneja un grid arrastrable y redimensionable. Cada elemento (Item) se registra
-    en un layout que se pasa a dashboard.Grid().
-    """
-
     DRAGGABLE_CLASS = "draggable"
 
     def __init__(self):
@@ -28,34 +22,30 @@ class Dashboard:
 
     @contextmanager
     def __call__(self, **props):
-        # Le decimos a dashboard.Grid que .draggable es nuestra "manija" de arrastre.
+        # Indicamos que .draggable será la zona de arrastre
         props["draggableHandle"] = f".{Dashboard.DRAGGABLE_CLASS}"
         with dashboard.Grid(self._layout, **props):
             yield
 
     class Item(ABC):
-        """
-        Clase base para cada elemento (gráfico, tarjeta, etc.) dentro del Dashboard.
-        """
         def __init__(self, board, x, y, w, h, **item_props):
-            self._key = str(uuid4())               # Identificador único
+            self._key = str(uuid4())
             self._draggable_class = Dashboard.DRAGGABLE_CLASS
-            self._dark_mode = True                # Bandera para modo oscuro/claro
+            self._dark_mode = True
 
-            # Registra este item en el tablero
+            # Registramos este ítem en el Dashboard
             board._register(
                 dashboard.Item(self._key, x, y, w, h, **item_props)
             )
 
         def _switch_theme(self):
-            """ Alterna modo oscuro / claro. """
+            """Cambiar entre modo oscuro y claro."""
             self._dark_mode = not self._dark_mode
 
         @contextmanager
         def title_bar(self, padding="5px 15px 5px 15px", dark_switcher=True):
             """
-            Crea un encabezado (Stack) que sirve de "barra" arrastrable si
-            asignamos la clase self._draggable_class.
+            Barra horizontal arrastrable (Stack) con clase self._draggable_class.
             """
             with mui.Stack(
                 className=self._draggable_class,
@@ -68,10 +58,8 @@ class Dashboard:
                     "borderColor": "divider",
                 },
             ):
-                # Aquí puede ir texto, iconos, etc.
                 yield
 
-                # Icono para alternar tema (opcional)
                 if dark_switcher:
                     if self._dark_mode:
                         mui.IconButton(mui.icon.DarkMode, onClick=self._switch_theme)
@@ -80,17 +68,16 @@ class Dashboard:
 
         @abstractmethod
         def __call__(self, *args, **kwargs):
-            """ Cada subclase define cómo se renderiza. """
             raise NotImplementedError
 
-
 ###############################################################################
-# HORIZONTAL BAR CHART
+# 2. HORIZONTAL BAR CHART (con Montos en Millones, Orden Ascendente)
 ###############################################################################
 class HorizontalBar(Dashboard.Item):
     """
-    Genera un gráfico de barras horizontal usando Nivo. Filtra por 'Sector' en Streamlit
-    y agrupa por 'recipientcountry_codename', sumando 'value_usd'.
+    Gráfico de barras horizontal usando Nivo, mostrando:
+      - Eje Y: recipientcountry_codename
+      - Eje X: value_usd (en millones)
     """
 
     def __init__(self, *args, **kwargs):
@@ -121,8 +108,14 @@ class HorizontalBar(Dashboard.Item):
 
     def __call__(self, data_dict):
         """
-        :param data_dict: Lista de diccionarios con campos:
-            { "recipientcountry_codename": "...", "value_usd": ... }
+        data_dict: Lista de diccionarios, p.ej:
+            [
+                {
+                    "recipientcountry_codename": "País A",
+                    "value_usd": 123.45  # en millones
+                },
+                ...
+            ]
         """
         with mui.Paper(
             key=self._key,
@@ -134,17 +127,15 @@ class HorizontalBar(Dashboard.Item):
             },
             elevation=1
         ):
-            # Barra de título arrastrable
+            # Barra de título (manija)
             with self.title_bar():
                 mui.icon.BarChart()
-                mui.Typography("Horizontal Bar Chart", sx={"flex": 1})
+                mui.Typography("Horizontal Bar (Millones, Asc)", sx={"flex": 1})
 
-            # Contenedor principal para el gráfico
             with mui.Box(sx={"flex": 1, "minHeight": 0, "padding": "10px"}):
-                # Renderizamos la gráfica con Nivo
-                # - 'layout="horizontal"' para barras horizontales
-                # - 'keys=["value_usd"]' define la(s) serie(s) a graficar
-                # - 'indexBy="recipientcountry_codename"' define la categoría (Y axis)
+                # Gráfico de barras horizontal
+                # 'keys=["value_usd"]' indica la columna con los valores
+                # 'indexBy="recipientcountry_codename"' para la categoría
                 nivo.Bar(
                     data=data_dict,
                     keys=["value_usd"],
@@ -160,7 +151,7 @@ class HorizontalBar(Dashboard.Item):
                         "tickSize": 5,
                         "tickPadding": 5,
                         "tickRotation": 0,
-                        "legend": "recipientcountry_codename",
+                        "legend": "País",
                         "legendPosition": "middle",
                         "legendOffset": -100
                     },
@@ -168,7 +159,7 @@ class HorizontalBar(Dashboard.Item):
                         "tickSize": 5,
                         "tickPadding": 5,
                         "tickRotation": 0,
-                        "legend": "value_usd",
+                        "legend": "Monto (Millones USD)",
                         "legendPosition": "middle",
                         "legendOffset": 40
                     },
@@ -200,43 +191,48 @@ class HorizontalBar(Dashboard.Item):
                     ]
                 )
 
-
 ###############################################################################
-# MAIN
+# 3. MAIN
 ###############################################################################
 def main():
     st.set_page_config(layout="wide")
-    st.title("Horizontal Bar Chart con Filtro de 'Sector'")
+    st.title("Horizontal Bar Chart: Montos a Millones, Orden Ascendente")
 
     # 1) Cargar dataset
     df = pd.read_parquet("unique_locations.parquet")
 
-    # 2) Crear un filtro de Sector
+    # 2) Filtro de Sector
     sector_list = df["Sector"].dropna().unique().tolist()
-    selected_sectors = st.multiselect("Filtrar por Sector:", sector_list, default=sector_list)
+    selected_sectors = st.multiselect(
+        "Filtrar por Sector:",
+        sector_list,
+        default=sector_list
+    )
 
-    # 3) Filtrar el DataFrame
+    # 3) Filtrar DataFrame
     df_filtered = df[df["Sector"].isin(selected_sectors)]
 
-    # 4) Agrupar por país y sumar value_usd
+    # 4) Agrupar por País, sumar value_usd
     df_grouped = df_filtered.groupby("recipientcountry_codename", as_index=False)["value_usd"].sum()
 
-    # 5) Convertir a lista de diccionarios (para nivo.Bar)
+    # 5) Convertir value_usd a millones
+    df_grouped["value_usd"] = df_grouped["value_usd"] / 1_000_000
+
+    # 6) Orden ascendente por value_usd
+    df_grouped = df_grouped.sort_values("value_usd", ascending=True)
+
+    # 7) Pasar a diccionario
     bar_data = df_grouped.to_dict(orient="records")
 
-    # 6) Crear el dashboard
+    # 8) Dashboard + Render
     board = Dashboard()
-
-    # 7) Instanciar nuestro HorizontalBar
     bar_item = HorizontalBar(board, x=0, y=0, w=6, h=5, isDraggable=True, isResizable=True)
 
-    # 8) Renderizar con streamlit_elements
     with elements("demo_dashboard"):
-        # Abrimos el Dashboard
         with board():
             bar_item(bar_data)
 
-    # 9) CSS para ver el cursor de arrastre
+    # Estilo para el cursor "move"
     st.markdown("""
         <style>
         .draggable {
