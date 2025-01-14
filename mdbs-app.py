@@ -29,18 +29,21 @@ country_data = (
     .sort_values(by="value_usd", ascending=False)
 )
 
+# Convertir valores a millones
+country_data["value_usd"] = country_data["value_usd"] / 1e6
+
 # Crear el layout para el dashboard
-layout = [dashboard.Item("bar_chart", 0, 0, 12, 8)]  # Ajustar el tamaño aquí
+layout = [dashboard.Item("bar_chart", 0, 0, 6, 4)]  # Tamaño reducido
 
 # Página principal
 st.title("GeoData Dashboard")
 
 with elements("GeoData"):
-    # Aplicar estilos para un contenedor más grande
+    # Aplicar estilos para un contenedor con tamaño reducido y sin fondo
     with mui.Box(
         sx={
             "width": "100%",
-            "height": 500,  # Altura personalizada
+            "height": 300,  # Altura más pequeña
             "display": "flex",
             "alignItems": "center",
             "justifyContent": "center",
@@ -50,7 +53,7 @@ with elements("GeoData"):
             data=country_data.to_dict("records"),
             keys=["value_usd"],
             indexBy="recipientcountry_codename",
-            margin={"top": 50, "right": 150, "bottom": 150, "left": 200},  # Márgenes ajustados
+            margin={"top": 30, "right": 100, "bottom": 100, "left": 100},
             padding=0.3,
             layout="horizontal",
             colors={"scheme": "nivo"},
@@ -58,9 +61,9 @@ with elements("GeoData"):
                 "tickSize": 5,
                 "tickPadding": 5,
                 "tickRotation": 45,
-                "legend": "Valor Acumulado (USD)",
+                "legend": "Valor Acumulado (Millones USD)",
                 "legendPosition": "middle",
-                "legendOffset": 80,
+                "legendOffset": 50,
             },
             axisLeft={
                 "tickSize": 5,
@@ -68,7 +71,7 @@ with elements("GeoData"):
                 "tickRotation": 0,
                 "legend": "País",
                 "legendPosition": "middle",
-                "legendOffset": -100,
+                "legendOffset": -70,
             },
             enableLabel=True,
             labelSkipWidth=12,
@@ -85,13 +88,13 @@ with elements("GeoData"):
                 }
             ],
             theme={
-                "background": "#1e1e1e",
-                "textColor": "#FFFFFF",
+                "textColor": "#31333F",  # Sin fondo
                 "tooltip": {
                     "container": {
-                        "background": "#333333",
-                        "color": "#FFFFFF",
+                        "background": "#FFFFFF",
+                        "color": "#31333F",
                     }
                 }
             },
+            sortByValue=True,  # Ordenar descendente
         )
