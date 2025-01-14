@@ -5,3 +5,4 @@ matplotlib
 streamlit-folium
 plotly
 pygwalker
+streamlit_elements 
