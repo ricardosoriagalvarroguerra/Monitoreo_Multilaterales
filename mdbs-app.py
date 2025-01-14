@@ -1,52 +1,51 @@
+# file: mdbs-app.py
+
+import json
 import streamlit as st
-from streamlit_elements import elements, dashboard, mui, nivo
-# Si tu versión no reconoce mui.icons.material, prueba descomentar:
-# from streamlit_elements import mui_icons
+from pathlib import Path
+from streamlit import session_state as state
+from streamlit_elements import elements, sync, event
+from types import SimpleNamespace
 
-st.set_page_config(layout="wide")
+# Importamos nuestras clases personalizadas
+from .dashboard import Dashboard, Editor, Card, DataGrid, Radar, Pie, Player
 
-layout = [
-    dashboard.Item("pie_chart", 0, 0, 4, 4, isDraggable=True, isResizable=True)
-]
+def main():
+    st.title("Mi App con CardHeader Arrastrable")
 
-with elements("demo"):
-    with dashboard.Grid(layout, draggableHandle=".drag-handle"):
-        with mui.Card(key="pie_chart"):
-            # -- Encabezado (manija):
-            # Opción A: si tu versión soporta mui.icons.material
-            header_action = mui.IconButton(mui.icons.material.DarkMode, sx={"color": "#fff"})
+    if "w" not in state:
+        board = Dashboard()
+        w = SimpleNamespace(
+            dashboard=board,
+            editor=Editor(board, 0, 0, 6, 11, minW=3, minH=3),
+            player=Player(board, 0, 12, 6, 10, minH=5),
+            pie=Pie(board, 6, 0, 6, 7, minW=3, minH=4),
+            radar=Radar(board, 12, 7, 3, 7, minW=2, minH=4),
+            card=Card(board, 6, 7, 3, 7, minW=2, minH=4),  # <-- Aquí usamos la Card custom
+            data_grid=DataGrid(board, 6, 13, 6, 7, minH=4),
+        )
+        state.w = w
 
-            # Opción B: si NO soporta .material, usa directamente mui.icons.DarkMode
-            # header_action = mui.IconButton(mui.icons.DarkMode, sx={"color": "#fff"})
+        w.editor.add_tab("Card content", Card.DEFAULT_CONTENT, "plaintext")
+        w.editor.add_tab("Data grid", json.dumps(DataGrid.DEFAULT_ROWS, indent=2), "json")
+        w.editor.add_tab("Radar chart", json.dumps(Radar.DEFAULT_DATA, indent=2), "json")
+        w.editor.add_tab("Pie chart", json.dumps(Pie.DEFAULT_DATA, indent=2), "json")
+    else:
+        w = state.w
 
-            # Opción C: si tampoco sirve, prueba con mui_icons
-            # header_action = mui.IconButton(mui_icons.MdDarkMode, sx={"color": "#fff"})
+    with elements("demo"):
+        event.Hotkey("ctrl+s", sync(), bindInputs=True, overrideDefault=True)
 
-            with mui.CardHeader(
-                title="Pie chart",
-                className="drag-handle",
-                sx={"cursor": "move", "backgroundColor": "#444444", "padding": "10px"},
-                action=header_action
-            ):
-                pass
+        # Definimos el dashboard
+        with w.dashboard(rowHeight=57):
+            w.editor()
+            w.player()
+            w.pie(w.editor.get_content("Pie chart"))
+            w.radar(w.editor.get_content("Radar chart"))
+            # Aquí renderizamos nuestra tarjeta:
+            w.card(w.editor.get_content("Card content"))
+            w.data_grid(w.editor.get_content("Data grid"))
 
-            # -- Contenido (gráfico):
-            with mui.CardContent(sx={"backgroundColor": "#333", "height": 400}):
-                nivo.Pie(
-                    data=[
-                        {"id": "java", "label": "java", "value": 465},
-                        {"id": "rust", "label": "rust", "value": 140},
-                    ],
-                    # etc...
-                )
-
-st.markdown(
-    """
-    <style>
-    .drag-handle {
-        cursor: move;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+if __name__ == "__main__":
+    st.set_page_config(layout="wide")
+    main()
