@@ -30,7 +30,7 @@ country_data = (
 )
 
 # Crear el layout para el dashboard
-layout = [dashboard.Item("bar_chart", 0, 0, 6, 4)]
+layout = [dashboard.Item("bar_chart", 0, 0, 12, 6)]  # Incrementar dimensiones aquí
 
 # Página principal
 st.title("GeoData Dashboard")
@@ -41,9 +41,8 @@ with elements("GeoData"):
             data=country_data.to_dict("records"),
             keys=["value_usd"],
             indexBy="recipientcountry_codename",
-            margin={"top": 50, "right": 50, "bottom": 100, "left": 80},
+            margin={"top": 50, "right": 100, "bottom": 150, "left": 150},  # Ajustar márgenes
             padding=0.3,
-            groupMode="grouped",
             layout="horizontal",
             colors={"scheme": "nivo"},
             axisBottom={
@@ -52,7 +51,7 @@ with elements("GeoData"):
                 "tickRotation": 45,
                 "legend": "Valor Acumulado (USD)",
                 "legendPosition": "middle",
-                "legendOffset": 50,
+                "legendOffset": 80,
             },
             axisLeft={
                 "tickSize": 5,
@@ -60,9 +59,11 @@ with elements("GeoData"):
                 "tickRotation": 0,
                 "legend": "País",
                 "legendPosition": "middle",
-                "legendOffset": -70,
+                "legendOffset": -100,
             },
             enableLabel=True,
+            labelSkipWidth=12,
+            labelSkipHeight=12,
             legends=[
                 {
                     "dataFrom": "keys",
@@ -74,4 +75,14 @@ with elements("GeoData"):
                     "symbolSize": 20,
                 }
             ],
+            theme={
+                "background": "#1e1e1e",
+                "textColor": "#FFFFFF",
+                "tooltip": {
+                    "container": {
+                        "background": "#333333",
+                        "color": "#FFFFFF",
+                    }
+                }
+            },
         )
