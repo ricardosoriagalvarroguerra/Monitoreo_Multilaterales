@@ -396,11 +396,11 @@ def geodata_frecuencia():
 def geodata_montos():
     """
     Subpágina Montos: muestra un mapa y barras con la sumatoria de montos (value_usd)
-    en 'unique_locations.parquet'. El tamaño de los puntos en el mapa es proporcional
-    al valor en USD.
+    en 'unique_locations.parquet', convertidos a millones. El tamaño de los puntos
+    en el mapa es proporcional a 'value_usd_millones'.
     """
     st.markdown('<h2 class="title">GeoData - Montos</h2>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Visualiza el total de montos (value_usd) por ubicación.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Visualiza el total de montos (value_usd, en millones) por ubicación.</p>', unsafe_allow_html=True)
 
     # Cargamos el dataframe "UNIQUE_LOCATIONS"
     data_unique = DATASETS["UNIQUE_LOCATIONS"].copy()
@@ -426,16 +426,25 @@ def geodata_montos():
         st.warning("No se encontraron datos para el sector seleccionado en Montos.")
         return
 
-    # Mapa basado en Montos -> tamaño proporcional a value_usd
+    # Convertir a millones
+    data_filtrada_loc["value_usd_millones"] = data_filtrada_loc["value_usd"] / 1_000_000
+
+    # Mapa basado en Montos -> tamaño proporcional a value_usd_millones
     fig_map = px.scatter_mapbox(
         data_filtrada_loc,
         lat="Latitude",
         lon="Longitude",
         color="Sector",
-        size="value_usd",  # tamaño de punto según montos
+        size="value_usd_millones",  # tamaño de punto según montos en millones
         color_discrete_map={filtro_sector: "#ef233c"},
         hover_name="iatiidentifier",
-        hover_data=["recipientcountry_codename", "Sector", "value_usd"],
+        hover_data={
+            "recipientcountry_codename": True,
+            "Sector": True,
+            "value_usd_millones": ":.2f",  # Muestra dos decimales
+            "Latitude": False,
+            "Longitude": False
+        },
         zoom=3,
         center={
             "lat": data_filtrada_loc["Latitude"].mean(),
@@ -443,7 +452,7 @@ def geodata_montos():
         },
         height=600,
         mapbox_style="carto-darkmatter",
-        title=f"Montos en el Sector: {filtro_sector}"
+        title=f"Montos en el Sector: {filtro_sector} (Millones USD)"
     )
     fig_map.update_layout(
         margin={"r": 20, "t": 80, "l": 20, "b": 20},
@@ -458,29 +467,29 @@ def geodata_montos():
         plot_bgcolor="rgba(0,0,0,0)"
     )
 
-    # Gráfico de Barras: suma de montos (value_usd) por país
+    # Gráfico de Barras: suma de montos (value_usd_millones) por país
     montos_por_pais = (
         data_filtrada_loc
-        .groupby("recipientcountry_codename")["value_usd"]
+        .groupby("recipientcountry_codename")["value_usd_millones"]
         .sum()
-        .reset_index(name="Total USD")
+        .reset_index(name="Total USD (Millones)")
     )
-    montos_por_pais = montos_por_pais.sort_values(by="Total USD", ascending=True)
+    montos_por_pais = montos_por_pais.sort_values(by="Total USD (Millones)", ascending=True)
 
     fig_bars = go.Figure()
     fig_bars.add_trace(
         go.Bar(
-            x=montos_por_pais["Total USD"],
+            x=montos_por_pais["Total USD (Millones)"],
             y=montos_por_pais["recipientcountry_codename"],
             orientation='h',
             marker_color="#ef233c",
-            text=montos_por_pais["Total USD"],
+            text=round(montos_por_pais["Total USD (Millones)"], 2),
             textposition="outside"
         )
     )
     fig_bars.update_layout(
-        title="Sumatoria de Montos (value_usd) por País",
-        xaxis_title="Montos (USD)",
+        title="Sumatoria de Montos (Millones USD) por País",
+        xaxis_title="Montos (Millones USD)",
         yaxis_title=None,
         height=600,
         margin=dict(l=20, r=20, t=60, b=20),
