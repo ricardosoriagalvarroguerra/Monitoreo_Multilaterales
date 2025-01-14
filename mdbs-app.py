@@ -2,6 +2,7 @@ import streamlit as st
 from streamlit_elements import elements, mui, html
 import plotly.express as px
 import pandas as pd
+import json
 from collections import defaultdict
 
 def app_monitoreo():
@@ -9,9 +10,9 @@ def app_monitoreo():
     st.write("Bienvenido a la página principal de **Monitoreo Multilaterales**.")
 
     with elements("monitoreo"):
-        # Reemplazamos mui.Card por mui.Box
-        with mui.Box(sx={"padding": "16px", "marginTop": "16px", "border": "1px solid #ccc", "borderRadius": "8px"}):
+        with mui.Card(sx={"padding": "16px", "marginTop": "16px"}):
             mui.Typography("Contenido específico para Monitoreo Multilaterales", variant="body1")
+
 
 def app_geodata():
     st.title("GeoData")
@@ -23,8 +24,7 @@ def app_geodata():
     if subpagina == "Principal":
         # Vista principal de GeoData
         with elements("geodata"):
-            # Reemplazamos mui.Card por mui.Box
-            with mui.Box(sx={"padding": "16px", "marginTop": "16px", "border": "1px solid #ccc", "borderRadius": "8px"}):
+            with mui.Card(sx={"padding": "16px", "marginTop": "16px"}):
                 mui.Typography("Contenido específico para GeoData", variant="body1")
 
     elif subpagina == "Montos":
@@ -33,7 +33,7 @@ def app_geodata():
         # Filtro por Sector
         sector_filtrado = st.selectbox("Selecciona el Sector", ["Todos", "Salud", "Educación", "Infraestructura"])
 
-        # Datos de ejemplo
+        # Datos de ejemplo con point_pos = "lat,long"
         data = [
             {
                 "id": 1,
@@ -65,36 +65,44 @@ def app_geodata():
             }
         ]
 
-        # Filtrar por Sector
+        # Aplicamos filtro
         if sector_filtrado != "Todos":
             data = [d for d in data if d["Sector"] == sector_filtrado]
 
+        # Convertimos data a DataFrame para Plotly
         df = pd.DataFrame(data)
-        # Separar lat/long
+
+        # Separar lat/long de la columna 'point_pos'
         lat_vals, lon_vals = [], []
         for pos in df["point_pos"]:
             lat_str, lon_str = pos.split(",")
             lat_vals.append(float(lat_str))
             lon_vals.append(float(lon_str))
+
         df["lat"] = lat_vals
         df["lon"] = lon_vals
 
-        # Mapa de puntos Plotly
+        # ----------------------------
+        # Generar la figura del mapa
+        # ----------------------------
         fig_map = px.scatter_geo(
             df,
             lat="lat",
             lon="lon",
-            color="Sector",
-            size="value_usd",
+            color="Sector",           # Colorear por Sector
+            size="value_usd",         # Tamaño según value_usd
             hover_name="recipientcountry_codename",
             projection="natural earth",
             title="Mapa de Puntos (Plotly)",
         )
         fig_map.update_layout(height=400, margin={"r":0,"t":40,"l":0,"b":0})
-        fig_map_html = fig_map.to_html(full_html=False)
 
-        # Gráfico de barras horizontal Plotly
+        # ------------------------------
+        # Generar la figura de barras
+        # ------------------------------
+        # Agrupamos value_usd por recipientcountry_codename
         agg_data = df.groupby("recipientcountry_codename")["value_usd"].sum().reset_index()
+
         fig_bar = px.bar(
             agg_data,
             x="value_usd",
@@ -104,19 +112,24 @@ def app_geodata():
             title="Gráfico de Barras Horizontal (Plotly)",
         )
         fig_bar.update_layout(height=400, margin={"r":0,"t":40,"l":0,"b":0})
+
+        # Convertimos las figuras a HTML
+        # Nota: Se omite 'scripts=True' para evitar conflictos con streamlit-elements
+        fig_map_html = fig_map.to_html(full_html=False)
         fig_bar_html = fig_bar.to_html(full_html=False)
 
         with elements("montos"):
-            # Mapa de Puntos
-            with mui.Box(sx={"padding": "16px", "marginTop": "16px", "border": "1px solid #ccc", "borderRadius": "8px"}):
+            # ----- MAPA DE PUNTOS -----
+            with mui.Card(sx={"padding": "16px", "marginTop": "16px"}):
                 mui.Typography("Mapa de Puntos con Plotly", variant="h6")
-                # scripts=True para que se ejecute el JS en el HTML de Plotly
-                html.html(fig_map_html, scripts=True, height="400px")
+                # Se omite scripts=True
+                html.html(fig_map_html, height="400px")
 
-            # Barras Horizontal
-            with mui.Box(sx={"padding": "16px", "marginTop": "16px", "border": "1px solid #ccc", "borderRadius": "8px"}):
+            # ----- BARRAS HORIZONTAL -----
+            with mui.Card(sx={"padding": "16px", "marginTop": "16px"}):
                 mui.Typography("Gráfico de Barras Horizontal con Plotly", variant="h6")
-                html.html(fig_bar_html, scripts=True, height="400px")
+                # Se omite scripts=True
+                html.html(fig_bar_html, height="400px")
 
 
 def app_flujos():
@@ -124,12 +137,13 @@ def app_flujos():
     st.write("Aquí se mostrarán los datos de flujos agregados.")
 
     with elements("flujos"):
-        with mui.Box(sx={"padding": "16px", "marginTop": "16px", "border": "1px solid #ccc", "borderRadius": "8px"}):
+        with mui.Card(sx={"padding": "16px", "marginTop": "16px"}):
             mui.Typography("Contenido específico para Flujos Agregados", variant="body1")
 
 
 def main():
     st.set_page_config(page_title="Monitoreo Multilaterales", layout="wide")
+
     st.sidebar.title("Navegación")
     opcion = st.sidebar.selectbox(
         "Selecciona una sección:",
@@ -142,7 +156,6 @@ def main():
         app_geodata()
     elif opcion == "Flujos Agregados":
         app_flujos()
-
 
 if __name__ == "__main__":
     main()
