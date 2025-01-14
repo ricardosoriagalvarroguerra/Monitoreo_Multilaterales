@@ -114,6 +114,7 @@ def app_geodata():
         fig_bar.update_layout(height=400, margin={"r":0,"t":40,"l":0,"b":0})
 
         # Convertimos las figuras a HTML
+        # Nota: Se omite 'scripts=True' para evitar conflictos con streamlit-elements
         fig_map_html = fig_map.to_html(full_html=False)
         fig_bar_html = fig_bar.to_html(full_html=False)
 
@@ -121,14 +122,14 @@ def app_geodata():
             # ----- MAPA DE PUNTOS -----
             with mui.Card(sx={"padding": "16px", "marginTop": "16px"}):
                 mui.Typography("Mapa de Puntos con Plotly", variant="h6")
-                # Importante: scripts=True para que se ejecute el JS de Plotly
-                html.html(fig_map_html, scripts=True, height="400px")
+                # Se omite scripts=True
+                html.html(fig_map_html, height="400px")
 
             # ----- BARRAS HORIZONTAL -----
             with mui.Card(sx={"padding": "16px", "marginTop": "16px"}):
                 mui.Typography("Gráfico de Barras Horizontal con Plotly", variant="h6")
-                # Igual, scripts=True
-                html.html(fig_bar_html, scripts=True, height="400px")
+                # Se omite scripts=True
+                html.html(fig_bar_html, height="400px")
 
 
 def app_flujos():
