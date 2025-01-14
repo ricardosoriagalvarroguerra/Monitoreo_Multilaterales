@@ -2,8 +2,6 @@ import streamlit as st
 from streamlit_elements import elements, mui, html
 import plotly.express as px
 import pandas as pd
-import json
-from collections import defaultdict
 
 def app_monitoreo():
     st.title("Monitoreo Multilaterales")
@@ -116,28 +114,30 @@ def app_geodata():
         # ------------------------------
         # Convertimos las figuras a HTML
         # ------------------------------
-        # Ajusta include_plotlyjs a "cdn" o True. 'cdn' es recomendable porque
-        # inyecta la librería Plotly desde Internet.
-        fig_map_html = fig_map.to_html(include_plotlyjs="cdn", full_html=False)
-        fig_bar_html = fig_bar.to_html(include_plotlyjs="cdn", full_html=False)
+        # Usamos include_plotlyjs="cdn" para que cargue la librería de Plotly desde la CDN.
+        fig_map_html = fig_map.to_html(full_html=False, include_plotlyjs="cdn")
+        fig_bar_html = fig_bar.to_html(full_html=False, include_plotlyjs="cdn")
 
-        # ------------------------------
         # Renderizamos con streamlit-elements
-        # ------------------------------
         with elements("montos"):
             # ----- MAPA DE PUNTOS -----
             with mui.Card(sx={"padding": "16px", "marginTop": "16px"}):
                 mui.Typography("Mapa de Puntos con Plotly", variant="h6")
 
-                # AQUÍ EL CAMBIO IMPORTANTE: usar html.Html en lugar de html.html
-                html.Html(content=fig_map_html, style={"height": "400px", "width": "100%"})
+                # IMPORTANTE: usar html.Html() en lugar de html.html()
+                html.Html(
+                    content=fig_map_html,
+                    style={"height": "400px", "width": "100%"}
+                )
 
             # ----- BARRAS HORIZONTAL -----
             with mui.Card(sx={"padding": "16px", "marginTop": "16px"}):
                 mui.Typography("Gráfico de Barras Horizontal con Plotly", variant="h6")
 
-                # Lo mismo para la gráfica de barras
-                html.Html(content=fig_bar_html, style={"height": "400px", "width": "100%"})
+                html.Html(
+                    content=fig_bar_html,
+                    style={"height": "400px", "width": "100%"}
+                )
 
 
 def app_flujos():
