@@ -203,13 +203,13 @@ def cooperaciones_tecnicas():
         )
         fig_line.update_traces(line_color="#ee6c4d")
 
-    # Fondo transparente
+    # Fondo transparente, sin gridlines de fondo
     fig_line.update_layout(
         legend_title_text="",
         font_color="#FFFFFF",
         margin=dict(l=20, r=20, t=60, b=20),
-        xaxis=dict(gridcolor="#555555"),
-        yaxis=dict(gridcolor="#555555"),
+        xaxis=dict(gridcolor=None, showgrid=False),
+        yaxis=dict(gridcolor=None, showgrid=False),
         title_font_color="#FFFFFF",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)"
@@ -256,7 +256,7 @@ def cooperaciones_tecnicas():
             y=porcentaje_tc["Year"],
             mode="markers+text",
             marker=dict(color="crimson", size=10),
-            text=round(porcentaje_tc["Porcentaje TC"], 2),
+            text=round(row["Porcentaje TC"], 2),
             textposition="middle right",
             textfont=dict(color="#FFFFFF"),
             name="Porcentaje TC"
@@ -424,15 +424,12 @@ def subpagina_aprobaciones():
     # 3) Filtros en la barra lateral
     st.sidebar.header("Filtros - Aprobaciones")
 
-    # -----------------------------------------------------------
     # Switch entre General y Regiones
     opcion_region = st.sidebar.radio("¿Deseas filtrar por Región?", ["General", "Regiones"], index=0)
     
     if opcion_region == "General":
-        # => No filtramos por región ni país, mostramos TODO
         df_region_filtered = df.copy()
     else:
-        # => Se activan los filtros de región
         regiones_disponibles = sorted(df["region"].dropna().unique())
         regiones_seleccionadas = st.sidebar.multiselect(
             "Selecciona región(es):",
@@ -441,7 +438,6 @@ def subpagina_aprobaciones():
         )
         df_region_filtered = df[df["region"].isin(regiones_seleccionadas)]
         
-        # => Una vez elegida(s) región(es), se filtra también por país
         paises_disponibles = sorted(df_region_filtered["recipientcountry_codename"].dropna().unique())
         paises_seleccionados = st.sidebar.multiselect(
             "Selecciona país(es):",
@@ -449,14 +445,12 @@ def subpagina_aprobaciones():
             default=paises_disponibles  # Por defecto, todos
         )
         df_region_filtered = df_region_filtered[df_region_filtered["recipientcountry_codename"].isin(paises_seleccionados)]
-    # -----------------------------------------------------------
 
-    # 3.3) Filtro de rango de años (por defecto, min y max del dataset filtrado)
     if df_region_filtered["year"].notnull().sum() == 0:
-        # Si no hay datos con 'year', no podemos continuar
         st.warning("No hay datos disponibles para las selecciones de región/país.")
         return
 
+    # 3.3) Filtro de rango de años (por defecto, min y max del dataset filtrado)
     anio_min, anio_max = int(df_region_filtered["year"].min()), int(df_region_filtered["year"].max())
     rango_anios = st.sidebar.slider(
         "Rango de años:",
@@ -464,29 +458,38 @@ def subpagina_aprobaciones():
         max_value=anio_max,
         value=(anio_min, anio_max)  
     )
-    df_region_filtered = df_region_filtered[(df_region_filtered["year"] >= rango_anios[0]) & (df_region_filtered["year"] <= rango_anios[1])]
+    df_region_filtered = df_region_filtered[
+        (df_region_filtered["year"] >= rango_anios[0]) 
+        & (df_region_filtered["year"] <= rango_anios[1])
+    ]
 
-    # 3.4) Filtro de rangos de montos (value_usd) - por defecto, min y max
-    if df_region_filtered["value_usd"].notnull().sum() == 0:
+    # 3.4) Filtro de rangos de montos en Millones
+    #     1) Creamos columna en millones
+    df_region_filtered["value_usd_millones"] = df_region_filtered["value_usd"] / 1_000_000
+
+    if df_region_filtered["value_usd_millones"].notnull().sum() == 0:
         st.warning("No hay valores de 'value_usd' disponibles tras los filtros previos.")
         return
 
-    monto_min, monto_max = float(df_region_filtered["value_usd"].min()), float(df_region_filtered["value_usd"].max())
+    monto_min_millones = float(df_region_filtered["value_usd_millones"].min())
+    monto_max_millones = float(df_region_filtered["value_usd_millones"].max())
     rango_montos = st.sidebar.slider(
-        "Rango de montos (USD):",
-        min_value=monto_min,
-        max_value=monto_max,
-        value=(monto_min, monto_max)  
+        "Rango de montos (Millones USD):",
+        min_value=monto_min_millones,
+        max_value=monto_max_millones,
+        value=(monto_min_millones, monto_max_millones)
     )
-    df_region_filtered = df_region_filtered[(df_region_filtered["value_usd"] >= rango_montos[0]) & (df_region_filtered["value_usd"] <= rango_montos[1])]
+    df_region_filtered = df_region_filtered[
+        (df_region_filtered["value_usd_millones"] >= rango_montos[0]) 
+        & (df_region_filtered["value_usd_millones"] <= rango_montos[1])
+    ]
 
-    # 4) Agrupación por año y cálculo de la sumatoria de value_usd
     if df_region_filtered.empty:
         st.warning("No hay datos disponibles para los filtros actuales.")
         return
 
-    df_agg = df_region_filtered.groupby("year")["value_usd"].sum().reset_index()
-    df_agg["value_usd_millones"] = df_agg["value_usd"] / 1_000_000
+    # 4) Agrupación por año, sum(value_usd_millones)
+    df_agg = df_region_filtered.groupby("year")["value_usd_millones"].sum().reset_index()
 
     # 5) Gráfico de Barras
     fig_bar = px.bar(
@@ -494,13 +497,22 @@ def subpagina_aprobaciones():
         x="year",
         y="value_usd_millones",
         labels={"year": "Año", "value_usd_millones": "Valor (Millones USD)"},
-        title="Sumatoria de Value_USD por Año (en millones)"
+        title="Sumatoria de Value_USD (en millones) por Año",
+        color_discrete_sequence=["#c1121f"]  # Color personalizado
     )
-    # Fondo transparente
+    # Sin gridlines, fondo transparente
     fig_bar.update_layout(
         font_color="#FFFFFF",
-        xaxis=dict(title="Año", gridcolor="#555555"),
-        yaxis=dict(title="Monto (Millones USD)", gridcolor="#555555"),
+        xaxis=dict(
+            title="Año",
+            showgrid=False,
+            zeroline=False
+        ),
+        yaxis=dict(
+            title="Monto (Millones USD)",
+            showgrid=False,
+            zeroline=False
+        ),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=20, r=20, t=60, b=20)
@@ -508,16 +520,10 @@ def subpagina_aprobaciones():
 
     st.plotly_chart(fig_bar, use_container_width=True)
 
-    # Tabla opcional
-    if not df_agg.empty:
-        st.write("### Detalle de la agregación")
-        st.dataframe(df_agg.style.format({"value_usd_millones": "{:,.2f}"}))
-    else:
-        st.warning("No hay datos disponibles para los filtros seleccionados.")
-
+# -----------------------------------------------------------------------------
 def subpagina_desembolsos():
     """Subpágina para mostrar Desembolsos (disbursements_data.parquet). 
-       Incluye también la lógica de 'General' vs 'Regiones'.
+       Incluye la misma lógica de filtro en millones y color de barras.
     """
     st.subheader("Desembolsos (Disbursements Data)")
 
@@ -545,12 +551,10 @@ def subpagina_desembolsos():
     # 3) Filtros en la barra lateral
     st.sidebar.header("Filtros - Desembolsos")
 
-    # -----------------------------------------------------------
     # Switch entre General y Regiones
     opcion_region = st.sidebar.radio("¿Deseas filtrar por Región?", ["General", "Regiones"], index=0)
 
     if opcion_region == "General":
-        # => No filtramos por región ni país
         df_region_filtered = df.copy()
     else:
         regiones_disponibles = sorted(df["region"].dropna().unique())
@@ -568,12 +572,12 @@ def subpagina_desembolsos():
             default=paises_disponibles
         )
         df_region_filtered = df_region_filtered[df_region_filtered["recipientcountry_codename"].isin(paises_seleccionados)]
-    # -----------------------------------------------------------
 
     if df_region_filtered["year"].notnull().sum() == 0:
         st.warning("No hay datos disponibles para las selecciones de región/país.")
         return
 
+    # Filtro rango de años
     anio_min, anio_max = int(df_region_filtered["year"].min()), int(df_region_filtered["year"].max())
     rango_anios = st.sidebar.slider(
         "Rango de años:",
@@ -581,52 +585,63 @@ def subpagina_desembolsos():
         max_value=anio_max,
         value=(anio_min, anio_max)
     )
-    df_region_filtered = df_region_filtered[(df_region_filtered["year"] >= rango_anios[0]) & (df_region_filtered["year"] <= rango_anios[1])]
+    df_region_filtered = df_region_filtered[
+        (df_region_filtered["year"] >= rango_anios[0]) 
+        & (df_region_filtered["year"] <= rango_anios[1])
+    ]
 
-    if df_region_filtered["value_usd"].notnull().sum() == 0:
-        st.warning("No hay valores de 'value_usd' disponibles tras los filtros previos.")
+    # Filtro de monto en millones
+    df_region_filtered["value_usd_millones"] = df_region_filtered["value_usd"] / 1_000_000
+    if df_region_filtered["value_usd_millones"].notnull().sum() == 0:
+        st.warning("No hay valores de 'value_usd' tras los filtros previos.")
         return
 
-    monto_min, monto_max = float(df_region_filtered["value_usd"].min()), float(df_region_filtered["value_usd"].max())
+    monto_min_millones = float(df_region_filtered["value_usd_millones"].min())
+    monto_max_millones = float(df_region_filtered["value_usd_millones"].max())
     rango_montos = st.sidebar.slider(
-        "Rango de montos (USD):",
-        min_value=monto_min,
-        max_value=monto_max,
-        value=(monto_min, monto_max)
+        "Rango de montos (Millones USD):",
+        min_value=monto_min_millones,
+        max_value=monto_max_millones,
+        value=(monto_min_millones, monto_max_millones)
     )
-    df_region_filtered = df_region_filtered[(df_region_filtered["value_usd"] >= rango_montos[0]) & (df_region_filtered["value_usd"] <= rango_montos[1])]
+    df_region_filtered = df_region_filtered[
+        (df_region_filtered["value_usd_millones"] >= rango_montos[0]) 
+        & (df_region_filtered["value_usd_millones"] <= rango_montos[1])
+    ]
 
     if df_region_filtered.empty:
         st.warning("No hay datos disponibles para los filtros actuales.")
         return
 
     # 4) Agrupar y graficar
-    df_agg = df_region_filtered.groupby("year")["value_usd"].sum().reset_index()
-    df_agg["value_usd_millones"] = df_agg["value_usd"] / 1_000_000
+    df_agg = df_region_filtered.groupby("year")["value_usd_millones"].sum().reset_index()
 
     fig_bar = px.bar(
         df_agg,
         x="year",
         y="value_usd_millones",
         labels={"year": "Año", "value_usd_millones": "Valor (Millones USD)"},
-        title="Sumatoria de Value_USD por Año (en millones) - Desembolsos"
+        title="Sumatoria de Value_USD (en millones) por Año - Desembolsos",
+        color_discrete_sequence=["#c1121f"]  # Color personalizado
     )
+    # Sin gridlines, fondo transparente
     fig_bar.update_layout(
         font_color="#FFFFFF",
-        xaxis=dict(title="Año", gridcolor="#555555"),
-        yaxis=dict(title="Monto (Millones USD)", gridcolor="#555555"),
+        xaxis=dict(
+            title="Año",
+            showgrid=False,
+            zeroline=False
+        ),
+        yaxis=dict(
+            title="Monto (Millones USD)",
+            showgrid=False,
+            zeroline=False
+        ),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=20, r=20, t=60, b=20)
     )
     st.plotly_chart(fig_bar, use_container_width=True)
-
-    # Tabla opcional
-    if not df_agg.empty:
-        st.write("### Detalle de la agregación - Desembolsos")
-        st.dataframe(df_agg.style.format({"value_usd_millones": "{:,.2f}"}))
-    else:
-        st.warning("No hay datos disponibles para los filtros seleccionados.")
 
 def flujos_agregados():
     """Página principal para Flujos Agregados, con subpáginas Aprobaciones y Desembolsos."""
