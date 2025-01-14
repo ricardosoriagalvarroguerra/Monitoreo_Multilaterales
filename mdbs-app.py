@@ -203,13 +203,13 @@ def cooperaciones_tecnicas():
         )
         fig_line.update_traces(line_color="#ee6c4d")
 
-    # Fondo transparente, sin gridlines de fondo
+    # Fondo transparente, sin gridlines
     fig_line.update_layout(
         legend_title_text="",
         font_color="#FFFFFF",
         margin=dict(l=20, r=20, t=60, b=20),
-        xaxis=dict(gridcolor=None, showgrid=False),
-        yaxis=dict(gridcolor=None, showgrid=False),
+        xaxis=dict(showgrid=False),
+        yaxis=dict(showgrid=False),
         title_font_color="#FFFFFF",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)"
@@ -267,8 +267,8 @@ def cooperaciones_tecnicas():
         title="Porcentaje de Cooperaciones Técnicas en el Total de Aprobaciones",
         xaxis_title="Porcentaje (%)",
         yaxis_title="Año",
-        xaxis=dict(showgrid=True, zeroline=False, gridcolor="#555555"),
-        yaxis=dict(showgrid=False, zeroline=False),
+        xaxis=dict(showgrid=False),
+        yaxis=dict(showgrid=False),
         font_color="#FFFFFF",
         height=600,
         margin=dict(l=20, r=20, t=60, b=20),
@@ -411,14 +411,9 @@ def subpagina_aprobaciones():
     df["year"] = df["transactiondate_isodate"].dt.year
 
     # Validar columnas
-    if "region" not in df.columns:
-        st.error("No se encontró la columna 'region' en el dataset de Aprobaciones.")
-        return
-    if "recipientcountry_codename" not in df.columns:
-        st.error("No se encontró la columna 'recipientcountry_codename' en el dataset de Aprobaciones.")
-        return
-    if "value_usd" not in df.columns:
-        st.error("No se encontró la columna 'value_usd' en el dataset de Aprobaciones.")
+    needed_cols = {"region", "recipientcountry_codename", "value_usd", "Sector"}
+    if not needed_cols.issubset(df.columns):
+        st.error("Faltan columnas en el dataset de Aprobaciones. Se requieren: region, recipientcountry_codename, value_usd, Sector.")
         return
 
     # 3) Filtros en la barra lateral
@@ -464,9 +459,7 @@ def subpagina_aprobaciones():
     ]
 
     # 3.4) Filtro de rangos de montos en Millones
-    #     1) Creamos columna en millones
     df_region_filtered["value_usd_millones"] = df_region_filtered["value_usd"] / 1_000_000
-
     if df_region_filtered["value_usd_millones"].notnull().sum() == 0:
         st.warning("No hay valores de 'value_usd' disponibles tras los filtros previos.")
         return
@@ -488,20 +481,21 @@ def subpagina_aprobaciones():
         st.warning("No hay datos disponibles para los filtros actuales.")
         return
 
-    # 4) Agrupación por año, sum(value_usd_millones)
-    df_agg = df_region_filtered.groupby("year")["value_usd_millones"].sum().reset_index()
+    # ----------------------------------------------------------------------------
+    # 4) GRÁFICO 1: Barras por AÑO (sum(value_usd_millones))
+    # ----------------------------------------------------------------------------
+    df_agg_year = df_region_filtered.groupby("year")["value_usd_millones"].sum().reset_index()
 
-    # 5) Gráfico de Barras
-    fig_bar = px.bar(
-        df_agg,
+    fig_bar_year = px.bar(
+        df_agg_year,
         x="year",
         y="value_usd_millones",
         labels={"year": "Año", "value_usd_millones": "Valor (Millones USD)"},
         title="Sumatoria de Value_USD (en millones) por Año",
-        color_discrete_sequence=["#c1121f"]  # Color personalizado
+        color_discrete_sequence=["#e5e5e5"]  # <-- color #e5e5e5
     )
     # Sin gridlines, fondo transparente
-    fig_bar.update_layout(
+    fig_bar_year.update_layout(
         font_color="#FFFFFF",
         xaxis=dict(
             title="Año",
@@ -517,13 +511,52 @@ def subpagina_aprobaciones():
         plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=20, r=20, t=60, b=20)
     )
+    st.plotly_chart(fig_bar_year, use_container_width=True)
 
-    st.plotly_chart(fig_bar, use_container_width=True)
+    # ----------------------------------------------------------------------------
+    # 5) OPCIÓN "Tag Sectores" -> segundo gráfico de barras por SECTOR
+    # ----------------------------------------------------------------------------
+    tag_sectores = st.checkbox("Tag Sectores", value=False)
+    if tag_sectores:
+        # Verificamos que haya columna "Sector"
+        if "Sector" not in df_region_filtered.columns:
+            st.error("No existe la columna 'Sector' en el dataset.")
+            return
 
-# -----------------------------------------------------------------------------
+        # Agrupamos por Sector
+        df_agg_sector = df_region_filtered.groupby("Sector")["value_usd_millones"].sum().reset_index()
+        df_agg_sector = df_agg_sector.sort_values("value_usd_millones", ascending=False)
+
+        fig_bar_sector = px.bar(
+            df_agg_sector,
+            x="Sector",
+            y="value_usd_millones",
+            labels={"Sector": "Sector", "value_usd_millones": "Valor (Millones USD)"},
+            title="Sumatoria de Value_USD (en millones) por Sector",
+            color_discrete_sequence=["#e5e5e5"]  # <-- color #e5e5e5
+        )
+        fig_bar_sector.update_layout(
+            font_color="#FFFFFF",
+            xaxis=dict(
+                title="Sector",
+                showgrid=False,
+                zeroline=False
+            ),
+            yaxis=dict(
+                title="Monto (Millones USD)",
+                showgrid=False,
+                zeroline=False
+            ),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            margin=dict(l=20, r=20, t=60, b=20)
+        )
+        st.plotly_chart(fig_bar_sector, use_container_width=True)
+
 def subpagina_desembolsos():
     """Subpágina para mostrar Desembolsos (disbursements_data.parquet). 
-       Incluye la misma lógica de filtro en millones y color de barras.
+       Incluye la misma lógica de filtro en millones, color #e5e5e5, 
+       y un segundo gráfico de barras por Sector al marcar 'Tag Sectores'.
     """
     st.subheader("Desembolsos (Disbursements Data)")
 
@@ -531,22 +564,13 @@ def subpagina_desembolsos():
     df = DATASETS["DISBURSEMENTS_DATA"].copy()
 
     # 2) Convertimos la columna de fecha a datetime y extraemos el año
-    if "transactiondate_isodate" not in df.columns:
-        st.error("No se encontró la columna 'transactiondate_isodate' en el dataset de Desembolsos.")
+    needed_cols = {"transactiondate_isodate", "region", "recipientcountry_codename", "value_usd", "Sector"}
+    if not needed_cols.issubset(df.columns):
+        st.error(f"Faltan columnas en el dataset de Desembolsos. Se requieren: {needed_cols}")
         return
+
     df["transactiondate_isodate"] = pd.to_datetime(df["transactiondate_isodate"], errors="coerce")
     df["year"] = df["transactiondate_isodate"].dt.year
-
-    # Validar columnas (region, recipientcountry_codename, value_usd)
-    if "region" not in df.columns:
-        st.error("No se encontró la columna 'region' en el dataset de Desembolsos.")
-        return
-    if "recipientcountry_codename" not in df.columns:
-        st.error("No se encontró la columna 'recipientcountry_codename' en el dataset de Desembolsos.")
-        return
-    if "value_usd" not in df.columns:
-        st.error("No se encontró la columna 'value_usd' en el dataset de Desembolsos.")
-        return
 
     # 3) Filtros en la barra lateral
     st.sidebar.header("Filtros - Desembolsos")
@@ -590,7 +614,6 @@ def subpagina_desembolsos():
         & (df_region_filtered["year"] <= rango_anios[1])
     ]
 
-    # Filtro de monto en millones
     df_region_filtered["value_usd_millones"] = df_region_filtered["value_usd"] / 1_000_000
     if df_region_filtered["value_usd_millones"].notnull().sum() == 0:
         st.warning("No hay valores de 'value_usd' tras los filtros previos.")
@@ -613,19 +636,19 @@ def subpagina_desembolsos():
         st.warning("No hay datos disponibles para los filtros actuales.")
         return
 
-    # 4) Agrupar y graficar
-    df_agg = df_region_filtered.groupby("year")["value_usd_millones"].sum().reset_index()
+    # 4) Gráfico de Barras por año
+    df_agg_year = df_region_filtered.groupby("year")["value_usd_millones"].sum().reset_index()
 
-    fig_bar = px.bar(
-        df_agg,
+    fig_bar_year = px.bar(
+        df_agg_year,
         x="year",
         y="value_usd_millones",
         labels={"year": "Año", "value_usd_millones": "Valor (Millones USD)"},
         title="Sumatoria de Value_USD (en millones) por Año - Desembolsos",
-        color_discrete_sequence=["#c1121f"]  # Color personalizado
+        color_discrete_sequence=["#e5e5e5"]  # <-- color
     )
     # Sin gridlines, fondo transparente
-    fig_bar.update_layout(
+    fig_bar_year.update_layout(
         font_color="#FFFFFF",
         xaxis=dict(
             title="Año",
@@ -641,7 +664,43 @@ def subpagina_desembolsos():
         plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=20, r=20, t=60, b=20)
     )
-    st.plotly_chart(fig_bar, use_container_width=True)
+    st.plotly_chart(fig_bar_year, use_container_width=True)
+
+    # 5) Tag Sectores (segundo gráfico)
+    tag_sectores = st.checkbox("Tag Sectores", value=False)
+    if tag_sectores:
+        if "Sector" not in df_region_filtered.columns:
+            st.error("No existe la columna 'Sector' en el dataset.")
+            return
+
+        df_agg_sector = df_region_filtered.groupby("Sector")["value_usd_millones"].sum().reset_index()
+        df_agg_sector = df_agg_sector.sort_values("value_usd_millones", ascending=False)
+
+        fig_bar_sector = px.bar(
+            df_agg_sector,
+            x="Sector",
+            y="value_usd_millones",
+            labels={"Sector": "Sector", "value_usd_millones": "Valor (Millones USD)"},
+            title="Sumatoria de Value_USD (en millones) por Sector - Desembolsos",
+            color_discrete_sequence=["#e5e5e5"]
+        )
+        fig_bar_sector.update_layout(
+            font_color="#FFFFFF",
+            xaxis=dict(
+                title="Sector",
+                showgrid=False,
+                zeroline=False
+            ),
+            yaxis=dict(
+                title="Monto (Millones USD)",
+                showgrid=False,
+                zeroline=False
+            ),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            margin=dict(l=20, r=20, t=60, b=20)
+        )
+        st.plotly_chart(fig_bar_sector, use_container_width=True)
 
 def flujos_agregados():
     """Página principal para Flujos Agregados, con subpáginas Aprobaciones y Desembolsos."""
