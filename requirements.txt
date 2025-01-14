@@ -1,8 +1,4 @@
 streamlit
-pandas
-folium
-matplotlib
-streamlit-folium
+streamlit-elements
 plotly
-pygwalker
-streamlit_elements 
+pandas
