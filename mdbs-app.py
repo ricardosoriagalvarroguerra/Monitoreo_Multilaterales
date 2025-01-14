@@ -30,7 +30,7 @@ country_data = (
 )
 
 # Crear el layout para el dashboard
-layout = [dashboard.Item("bar_chart", 0, 0, 12, 6)]  # Incrementar dimensiones aquí
+layout = [dashboard.Item("bar_chart", 0, 0, 30, 20)]  # Incrementar dimensiones aquí
 
 # Página principal
 st.title("GeoData Dashboard")
