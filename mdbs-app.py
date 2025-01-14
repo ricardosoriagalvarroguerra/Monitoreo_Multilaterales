@@ -2,18 +2,18 @@ import streamlit as st
 import pandas as pd
 from streamlit_elements import elements, dashboard, nivo, mui
 
-# Configuración de página en modo ancho
+# Configura la página en modo ancho
 st.set_page_config(layout="wide")
-st.title("Ejemplo: Barras Horizontales Drag/Resize")
+st.title("Barras Horizontales Drag & Resize")
 
-# 1) Cargar datos desde unique_location.parquet
+# --- Carga de datos ---
 @st.cache_data
 def load_data():
     return pd.read_parquet("unique_location.parquet")
 
 df = load_data()
 
-# 2) Agrupar por recipientcountry_codename y sumar value_usd
+# --- Agrupación y suma ---
 country_data = (
     df.groupby("recipientcountry_codename")["value_usd"]
     .sum()
@@ -21,31 +21,32 @@ country_data = (
     .sort_values(by="value_usd", ascending=False)
 )
 
-# Convertir a millones
+# Convertimos a millones de USD
 country_data["value_usd"] = country_data["value_usd"] / 1e6
 
-# 3) Definir layout del dashboard con un solo panel (bar_chart).
-#    (Puedes agregar más Items en la lista si quieres múltiples paneles.)
+# --- Definición del dashboard ---
+# Un solo item: bar_chart. Ponemos isDraggable y isResizable en True.
 layout = [
     dashboard.Item(
-        i="bar_chart", 
-        x=0, y=0,   # posición inicial
-        w=6, h=5,   # ancho y alto en celdas del grid
+        i="bar_chart",
+        x=0, y=0,
+        w=6, h=5,
         isDraggable=True,
         isResizable=True
     )
 ]
 
-# 4) Crear frame para streamlit-elements
+# --- Creamos el frame para streamlit-elements ---
 with elements("my_dashboard"):
-    
-    # dashboard.Grid() con draggableHandle para mover arrastrando .drag-handle
+
+    # Creamos el Grid, habilitando el arrastre solo en .drag-handle
+    # y un color de fondo oscuro (opcional).
     with dashboard.Grid(layout, draggableHandle=".drag-handle", style={"backgroundColor": "#212121"}):
-        
-        # Panel contenedor: usamos key="bar_chart" para enlazar con el layout
+
+        # Enlazamos el layout con key="bar_chart".
         with mui.Paper(key="bar_chart", sx={"padding": "10px", "backgroundColor": "#303030"}):
             
-            # Manija de arrastre
+            # "Manija" para arrastrar
             st.markdown(
                 """
                 <div class="drag-handle"
@@ -61,11 +62,10 @@ with elements("my_dashboard"):
                 unsafe_allow_html=True
             )
 
-            # 5) Gráfico de barras horizontal con Nivo
-            #    Se basa en country_data, con layout horizontal.
+            # Gráfico de barras horizontal con Nivo
             nivo.Bar(
                 data=country_data.to_dict("records"),
-                keys=["value_usd"],
+                keys=["value_usd"],  # Columna con valores
                 indexBy="recipientcountry_codename",
                 margin={"top": 30, "right": 80, "bottom": 80, "left": 150},
                 padding=0.3,
@@ -75,7 +75,7 @@ with elements("my_dashboard"):
                     "tickSize": 5,
                     "tickPadding": 5,
                     "tickRotation": 45,
-                    "legend": "Valor (Millones USD)",
+                    "legend": "Valor Acumulado (Millones USD)",
                     "legendPosition": "middle",
                     "legendOffset": 50,
                     "tickColor": "#FFFFFF",  
