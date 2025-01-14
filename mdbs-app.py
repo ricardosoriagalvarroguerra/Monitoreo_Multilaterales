@@ -56,6 +56,8 @@ class Dashboard:
                     "padding": padding,
                     "borderBottom": 1,
                     "borderColor": "divider",
+                    # Si quisieras que la barra "title_bar" también sea negra:
+                    # "backgroundColor": "#000000",
                 },
             ):
                 yield
@@ -71,18 +73,71 @@ class Dashboard:
             raise NotImplementedError
 
 ###############################################################################
-# 2. HORIZONTAL BAR CHART (con Montos en Millones, Orden Ascendente)
+# 2. CARD
+#    Se cambia la barra (CardHeader) a color #000000
 ###############################################################################
-class HorizontalBar(Dashboard.Item):
+class Card(Dashboard.Item):
     """
-    Gráfico de barras horizontal usando Nivo, mostrando:
-      - Eje Y: recipientcountry_codename
-      - Eje X: value_usd (en millones)
+    Ejemplo de tarjeta con CardHeader (barra),
+    donde cambiamos la barra a color negro.
     """
 
+    DEFAULT_CONTENT = (
+        "This impressive paella is a perfect party dish and a fun meal to cook "
+        "together with your guests. Add 1 cup of frozen peas along with the mussels, "
+        "if you like."
+    )
+
+    def __call__(self, content):
+        if not content:
+            content = self.DEFAULT_CONTENT
+
+        with mui.Card(
+            key=self._key,
+            sx={
+                "display": "flex",
+                "flexDirection": "column",
+                "borderRadius": 3,
+                "overflow": "hidden"
+            },
+            elevation=1
+        ):
+            # Encabezado de la tarjeta
+            mui.CardHeader(
+                title="Shrimp and Chorizo Paella",
+                subheader="September 14, 2016",
+                avatar=mui.Avatar("R", sx={"bgcolor": "red"}),
+                action=mui.IconButton(mui.icon.MoreVert),
+                className=self._draggable_class,
+                # ¡Aquí cambiamos el color de fondo a negro!
+                sx={"backgroundColor": "#000000"}
+            )
+
+            # Imagen
+            mui.CardMedia(
+                component="img",
+                height=194,
+                image="https://mui.com/static/images/cards/paella.jpg",
+                alt="Paella dish"
+            )
+
+            # Contenido
+            with mui.CardContent(sx={"flex": 1}):
+                mui.Typography(content)
+
+            # Acciones
+            with mui.CardActions(disableSpacing=True):
+                mui.IconButton(mui.icon.Favorite)
+                mui.IconButton(mui.icon.Share)
+
+###############################################################################
+# 3. HORIZONTAL BAR CHART
+#    (mantiene el mismo color por defecto; si deseas que también sea negro,
+#     ajusta la propiedad 'backgroundColor' en self.title_bar() )
+###############################################################################
+class HorizontalBar(Dashboard.Item):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Definimos temas para modo oscuro / claro
         self._theme = {
             "dark": {
                 "background": "#252526",
@@ -107,16 +162,6 @@ class HorizontalBar(Dashboard.Item):
         }
 
     def __call__(self, data_dict):
-        """
-        data_dict: Lista de diccionarios, p.ej:
-            [
-                {
-                    "recipientcountry_codename": "País A",
-                    "value_usd": 123.45  # en millones
-                },
-                ...
-            ]
-        """
         with mui.Paper(
             key=self._key,
             sx={
@@ -127,15 +172,12 @@ class HorizontalBar(Dashboard.Item):
             },
             elevation=1
         ):
-            # Barra de título (manija)
             with self.title_bar():
                 mui.icon.BarChart()
-                mui.Typography("Horizontal Bar (Millones, Asc)", sx={"flex": 1})
+                mui.Typography("Horizontal Bar", sx={"flex": 1})
 
             with mui.Box(sx={"flex": 1, "minHeight": 0, "padding": "10px"}):
-                # Gráfico de barras horizontal
-                # 'keys=["value_usd"]' indica la columna con los valores
-                # 'indexBy="recipientcountry_codename"' para la categoría
+                # Ejemplo sin filtrar, solo para ilustrar
                 nivo.Bar(
                     data=data_dict,
                     keys=["value_usd"],
@@ -147,98 +189,55 @@ class HorizontalBar(Dashboard.Item):
                     valueScale={"type": "linear"},
                     indexScale={"type": "band", "round": True},
                     colors={"scheme": "nivo"},
-                    axisLeft={
-                        "tickSize": 5,
-                        "tickPadding": 5,
-                        "tickRotation": 0,
-                        "legend": "País",
-                        "legendPosition": "middle",
-                        "legendOffset": -100
-                    },
-                    axisBottom={
-                        "tickSize": 5,
-                        "tickPadding": 5,
-                        "tickRotation": 0,
-                        "legend": "Monto (Millones USD)",
-                        "legendPosition": "middle",
-                        "legendOffset": 40
-                    },
-                    enableLabel=True,
-                    labelSkipWidth=12,
-                    labelSkipHeight=12,
-                    labelTextColor={"from": "color", "modifiers": [["darker", 1.6]]},
-                    legends=[
-                        {
-                            "dataFrom": "keys",
-                            "anchor": "bottom-right",
-                            "direction": "column",
-                            "justify": False,
-                            "translateX": 120,
-                            "translateY": 0,
-                            "itemsSpacing": 2,
-                            "itemWidth": 100,
-                            "itemHeight": 20,
-                            "symbolSize": 20,
-                            "effects": [
-                                {
-                                    "on": "hover",
-                                    "style": {
-                                        "itemOpacity": 1
-                                    }
-                                }
-                            ]
-                        }
-                    ]
                 )
 
 ###############################################################################
-# 3. MAIN
+# 4. MAIN
 ###############################################################################
 def main():
     st.set_page_config(layout="wide")
-    st.title("Horizontal Bar Chart: Montos a Millones, Orden Ascendente")
+    st.title("Ejemplo con barra de la Tarjeta en #000000")
 
-    # 1) Cargar dataset
-    df = pd.read_parquet("unique_locations.parquet")
+    df = pd.DataFrame({
+        "Sector": ["Agro", "Industria", "Comercio", "Agro", "Comercio"],
+        "recipientcountry_codename": ["Pais1", "Pais2", "Pais3", "Pais1", "Pais3"],
+        "value_usd": [1000000, 2000000, 1500000, 500000, 700000]
+    })
 
-    # 2) Filtro de Sector
+    # (Opcional) Filtro
     sector_list = df["Sector"].dropna().unique().tolist()
     selected_sectors = st.multiselect(
         "Filtrar por Sector:",
         sector_list,
         default=sector_list
     )
-
-    # 3) Filtrar DataFrame
     df_filtered = df[df["Sector"].isin(selected_sectors)]
 
-    # 4) Agrupar por País, sumar value_usd
+    # Agrupamos y preparamos datos (a modo de ejemplo)
     df_grouped = df_filtered.groupby("recipientcountry_codename", as_index=False)["value_usd"].sum()
-
-    # 5) Convertir value_usd a millones
-    df_grouped["value_usd"] = df_grouped["value_usd"] / 1_000_000
-
-    # 6) Orden ascendente por value_usd
     df_grouped = df_grouped.sort_values("value_usd", ascending=True)
 
-    # 7) Pasar a diccionario
     bar_data = df_grouped.to_dict(orient="records")
 
-    # 8) Dashboard + Render
+    # Instanciamos el dashboard
     board = Dashboard()
-    bar_item = HorizontalBar(board, x=0, y=0, w=6, h=5, isDraggable=True, isResizable=True)
+
+    # Un Card (barra negra) y un HorizontalBar
+    my_card = Card(board, x=0, y=0, w=3, h=4, isDraggable=True, isResizable=True)
+    bar_item = HorizontalBar(board, x=3, y=0, w=5, h=4, isDraggable=True, isResizable=True)
 
     with elements("demo_dashboard"):
         with board():
+            my_card("¡Contenido de la tarjeta!")  # Barra del Card = #000000
             bar_item(bar_data)
 
-    # Estilo para el cursor "move"
+    # Cursor de arrastre
     st.markdown("""
-        <style>
-        .draggable {
-            cursor: move;
-        }
-        </style>
+    <style>
+    .draggable {
+        cursor: move;
+    }
+    </style>
     """, unsafe_allow_html=True)
 
 
