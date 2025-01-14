@@ -80,15 +80,19 @@ def load_dataframes():
     # Dataset para la tabla de actividad por país
     df_activity = pd.read_parquet("activity_iadb.parquet")
 
-    # Dataset con transactiondate_isodate, Sector y value_usd (para el waffle)
+    # Dataset con transactiondate_isodate, Sector y value_usd (para el waffle o aprobaciones)
     df_outgoing = pd.read_parquet("outgoing_commitment_iadb.parquet")
+
+    # Dataset para la subpágina de "Desembolsos"
+    df_disbursements = pd.read_parquet("disbursements_data.parquet")
 
     # Diccionario de DataFrames
     datasets = {
         "IADB_DASH_BDD": df_iadb,
         "LOCATION_IADB": df_location,
         "ACTIVITY_IADB": df_activity,
-        "OUTGOING_IADB": df_outgoing
+        "OUTGOING_IADB": df_outgoing,
+        "DISBURSEMENTS_DATA": df_disbursements
     }
     return datasets
 
@@ -281,7 +285,6 @@ def geodata():
     st.markdown('<h1 class="title">GeoData</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora datos geoespaciales de los proyectos.</p>', unsafe_allow_html=True)
 
-    # -------------------- VISTA: "Mapa y Barras" ---------------------------
     # Cargamos el dataframe
     data_location = DATASETS["LOCATION_IADB"].copy()
 
@@ -304,13 +307,13 @@ def geodata():
         st.warning("No se encontraron datos para el sector seleccionado.")
         return
 
-    # ---------------------- MAPA (Scatter Mapbox) -------------------------
+    # Mapa (Scatter Mapbox)
     fig_map = px.scatter_mapbox(
         data_filtrada_loc,
         lat="Latitude",
         lon="Longitude",
         color="Sector",
-        color_discrete_map={filtro_sector: "#ef233c"},  # color personalizado
+        color_discrete_map={filtro_sector: "#ef233c"},
         size_max=15,
         hover_name="iatiidentifier",
         hover_data=["recipientcountry_codename", "Sector"],
@@ -334,7 +337,7 @@ def geodata():
         )
     )
 
-    # ------------------ GRÁFICO DE BARRAS (País vs cantidad) --------------
+    # Gráfico de Barras (País vs cantidad)
     conteo_por_pais = (
         data_filtrada_loc
         .groupby("recipientcountry_codename")["iatiidentifier"]
@@ -349,7 +352,7 @@ def geodata():
             x=conteo_por_pais["Cantidad de Proyectos"],
             y=conteo_por_pais["recipientcountry_codename"],
             orientation='h',
-            marker_color="#ef233c",  # mismo color del mapa
+            marker_color="#ef233c",
             text=conteo_por_pais["Cantidad de Proyectos"],
             textposition="outside"
         )
@@ -357,7 +360,7 @@ def geodata():
     fig_bars.update_layout(
         title="Cantidad de Proyectos por País",
         xaxis_title="Cantidad de Proyectos",
-        yaxis_title=None,  # Sin título en el eje Y
+        yaxis_title=None,
         height=600,
         margin=dict(l=20, r=20, t=60, b=20),
         font_color="#FFFFFF",
@@ -367,7 +370,6 @@ def geodata():
     fig_bars.update_xaxes(showgrid=False, zeroline=False)
     fig_bars.update_yaxes(showgrid=False, zeroline=False)
 
-    # Mostrar en dos columnas
     col_map, col_bar = st.columns([2, 2], gap="medium")
     with col_map:
         st.plotly_chart(fig_map, use_container_width=True)
@@ -388,13 +390,219 @@ def analisis_exploratorio():
     renderer.explorer()
 
 # -----------------------------------------------------------------------------
+# NUEVA PÁGINA 5: FLUJOS AGREGADOS
+# -----------------------------------------------------------------------------
+def subpagina_aprobaciones():
+    """Subpágina para mostrar Aprobaciones (outgoing_commitment_iadb.parquet)."""
+    st.subheader("Aprobaciones (Outgoing Commitments)")
+
+    # 1) Cargamos el DataFrame de aprobaciones
+    df = DATASETS["OUTGOING_IADB"].copy()
+
+    # 2) Convertimos la columna de fecha a datetime y extraemos el año
+    df["transactiondate_isodate"] = pd.to_datetime(df["transactiondate_isodate"], errors="coerce")
+    df["year"] = df["transactiondate_isodate"].dt.year
+
+    # Validar columnas
+    if "region" not in df.columns:
+        st.error("No se encontró la columna 'region' en el dataset de Aprobaciones.")
+        return
+    if "recipientcountry_codename" not in df.columns:
+        st.error("No se encontró la columna 'recipientcountry_codename' en el dataset de Aprobaciones.")
+        return
+    if "value_usd" not in df.columns:
+        st.error("No se encontró la columna 'value_usd' en el dataset de Aprobaciones.")
+        return
+
+    # 3) Filtros en la barra lateral
+    st.sidebar.header("Filtros - Aprobaciones")
+
+    # 3.1) Filtro de Región
+    regiones_disponibles = sorted(df["region"].dropna().unique())
+    region_seleccionada = st.sidebar.multiselect(
+        "Selecciona región(es):",
+        options=regiones_disponibles,
+        default=regiones_disponibles  # por defecto, todas
+    )
+    df = df[df["region"].isin(region_seleccionada)]
+
+    # 3.2) Filtro de País
+    paises_disponibles = sorted(df["recipientcountry_codename"].dropna().unique())
+    paises_seleccionados = st.sidebar.multiselect(
+        "Selecciona país(es):",
+        options=paises_disponibles,
+        default=paises_disponibles
+    )
+    df = df[df["recipientcountry_codename"].isin(paises_seleccionados)]
+
+    # 3.3) Filtro de rango de años
+    anio_min, anio_max = int(df["year"].min()), int(df["year"].max())
+    rango_anios = st.sidebar.slider(
+        "Rango de años:",
+        min_value=anio_min,
+        max_value=anio_max,
+        value=(anio_min, anio_max)
+    )
+    df = df[(df["year"] >= rango_anios[0]) & (df["year"] <= rango_anios[1])]
+
+    # 3.4) Filtro de rangos de montos (value_usd)
+    monto_min, monto_max = float(df["value_usd"].min()), float(df["value_usd"].max())
+    rango_montos = st.sidebar.slider(
+        "Rango de montos (USD):",
+        min_value=monto_min,
+        max_value=monto_max,
+        value=(monto_min, monto_max)
+    )
+    df = df[(df["value_usd"] >= rango_montos[0]) & (df["value_usd"] <= rango_montos[1])]
+
+    # 4) Agrupación por año y cálculo de la sumatoria de value_usd
+    df_agg = df.groupby("year")["value_usd"].sum().reset_index()
+    df_agg["value_usd_millones"] = df_agg["value_usd"] / 1_000_000
+
+    # 5) Gráfico de Barras
+    fig_bar = px.bar(
+        df_agg,
+        x="year",
+        y="value_usd_millones",
+        labels={"year": "Año", "value_usd_millones": "Valor (Millones USD)"},
+        title="Sumatoria de Value_USD por Año (en millones)"
+    )
+    fig_bar.update_layout(
+        font_color="#FFFFFF",
+        xaxis=dict(title="Año", gridcolor="#555555"),
+        yaxis=dict(title="Monto (Millones USD)", gridcolor="#555555"),
+        plot_bgcolor="#1E1E1E",
+        paper_bgcolor="#1E1E1E",
+        margin=dict(l=20, r=20, t=60, b=20)
+    )
+
+    # Mostrar el gráfico
+    st.plotly_chart(fig_bar, use_container_width=True)
+
+    # Tabla opcional
+    if not df_agg.empty:
+        st.write("### Detalle de la agregación")
+        st.dataframe(df_agg.style.format({"value_usd_millones": "{:,.2f}"}))
+    else:
+        st.warning("No hay datos disponibles para los filtros seleccionados.")
+
+def subpagina_desembolsos():
+    """Subpágina para mostrar Desembolsos (disbursements_data.parquet). 
+       (Ejemplo simple, puedes personalizar igual que Aprobaciones)
+    """
+    st.subheader("Desembolsos (Disbursements Data)")
+
+    # 1) Cargamos el DataFrame de desembolsos
+    df = DATASETS["DISBURSEMENTS_DATA"].copy()
+
+    # 2) Convertimos la columna de fecha a datetime y extraemos el año
+    if "transactiondate_isodate" not in df.columns:
+        st.error("No se encontró la columna 'transactiondate_isodate' en el dataset de Desembolsos.")
+        return
+    df["transactiondate_isodate"] = pd.to_datetime(df["transactiondate_isodate"], errors="coerce")
+    df["year"] = df["transactiondate_isodate"].dt.year
+
+    # Validar si existen las mismas columnas (region, recipientcountry_codename, value_usd) 
+    # o modificar acorde a tu dataset real
+    if "region" not in df.columns:
+        st.error("No se encontró la columna 'region' en el dataset de Desembolsos.")
+        return
+    if "recipientcountry_codename" not in df.columns:
+        st.error("No se encontró la columna 'recipientcountry_codename' en el dataset de Desembolsos.")
+        return
+    if "value_usd" not in df.columns:
+        st.error("No se encontró la columna 'value_usd' en el dataset de Desembolsos.")
+        return
+
+    # 3) Filtros en la barra lateral
+    st.sidebar.header("Filtros - Desembolsos")
+
+    # (Ejemplo rápido, similar a Aprobaciones)
+    regiones_disponibles = sorted(df["region"].dropna().unique())
+    region_seleccionada = st.sidebar.multiselect(
+        "Selecciona región(es):",
+        options=regiones_disponibles,
+        default=regiones_disponibles
+    )
+    df = df[df["region"].isin(region_seleccionada)]
+
+    paises_disponibles = sorted(df["recipientcountry_codename"].dropna().unique())
+    paises_seleccionados = st.sidebar.multiselect(
+        "Selecciona país(es):",
+        options=paises_disponibles,
+        default=paises_disponibles
+    )
+    df = df[df["recipientcountry_codename"].isin(paises_seleccionados)]
+
+    anio_min, anio_max = int(df["year"].min()), int(df["year"].max())
+    rango_anios = st.sidebar.slider(
+        "Rango de años:",
+        min_value=anio_min,
+        max_value=anio_max,
+        value=(anio_min, anio_max)
+    )
+    df = df[(df["year"] >= rango_anios[0]) & (df["year"] <= rango_anios[1])]
+
+    monto_min, monto_max = float(df["value_usd"].min()), float(df["value_usd"].max())
+    rango_montos = st.sidebar.slider(
+        "Rango de montos (USD):",
+        min_value=monto_min,
+        max_value=monto_max,
+        value=(monto_min, monto_max)
+    )
+    df = df[(df["value_usd"] >= rango_montos[0]) & (df["value_usd"] <= rango_montos[1])]
+
+    # 4) Agrupar y graficar
+    df_agg = df.groupby("year")["value_usd"].sum().reset_index()
+    df_agg["value_usd_millones"] = df_agg["value_usd"] / 1_000_000
+
+    fig_bar = px.bar(
+        df_agg,
+        x="year",
+        y="value_usd_millones",
+        labels={"year": "Año", "value_usd_millones": "Valor (Millones USD)"},
+        title="Sumatoria de Value_USD por Año (en millones) - Desembolsos"
+    )
+    fig_bar.update_layout(
+        font_color="#FFFFFF",
+        xaxis=dict(title="Año", gridcolor="#555555"),
+        yaxis=dict(title="Monto (Millones USD)", gridcolor="#555555"),
+        plot_bgcolor="#1E1E1E",
+        paper_bgcolor="#1E1E1E",
+        margin=dict(l=20, r=20, t=60, b=20)
+    )
+    st.plotly_chart(fig_bar, use_container_width=True)
+
+    # Tabla opcional
+    if not df_agg.empty:
+        st.write("### Detalle de la agregación - Desembolsos")
+        st.dataframe(df_agg.style.format({"value_usd_millones": "{:,.2f}"}))
+    else:
+        st.warning("No hay datos disponibles para los filtros seleccionados.")
+
+def flujos_agregados():
+    """Página principal para Flujos Agregados, con subpáginas Aprobaciones y Desembolsos."""
+    st.markdown('<h1 class="title">Flujos Agregados</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Visualización de Aprobaciones y Desembolsos.</p>', unsafe_allow_html=True)
+
+    # Subpáginas internas
+    sub_paginas = ["Aprobaciones", "Desembolsos"]
+    seleccion_subpagina = st.sidebar.radio("Seleccionar vista:", sub_paginas)
+
+    if seleccion_subpagina == "Aprobaciones":
+        subpagina_aprobaciones()
+    else:
+        subpagina_desembolsos()
+
+# -----------------------------------------------------------------------------
 # DICCIONARIO DE PÁGINAS
 # -----------------------------------------------------------------------------
 PAGINAS = {
     "Monitoreo Multilaterales": monitoreo_multilaterales,
     "Cooperaciones Técnicas": cooperaciones_tecnicas,
     "GeoData": geodata,
-    "Análisis Exploratorio": analisis_exploratorio
+    "Análisis Exploratorio": analisis_exploratorio,
+    "Flujos Agregados": flujos_agregados
 }
 
 # -----------------------------------------------------------------------------
