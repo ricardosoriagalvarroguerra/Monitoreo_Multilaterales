@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from streamlit_elements import elements, dashboard, nivo, mui
+from streamlit_elements import elements, dashboard, nivo
 
 # Cargar los datos desde el archivo Parquet
 @st.cache_data
@@ -33,22 +33,13 @@ country_data = (
 country_data["value_usd"] = country_data["value_usd"] / 1e6
 
 # Crear el layout para el dashboard
-layout = [dashboard.Item("bar_chart", 0, 0, 6, 2)]  # Reducido en largo y ancho
+layout = [dashboard.Item("bar_chart", 0, 0, 6, 2)]  # Reducido en tamaño
 
 # Página principal
 st.title("GeoData Dashboard")
 
 with elements("GeoData"):
-    # Aplicar estilos para un contenedor más pequeño y con color blanco en los ejes
-    with mui.Box(
-        sx={
-            "width": "50%",  # Reducir el ancho
-            "height": 300,  # Reducir la altura
-            "display": "flex",
-            "alignItems": "center",
-            "justifyContent": "center",
-        }
-    ):
+    with dashboard.Grid(layout):
         nivo.Bar(
             data=country_data.to_dict("records"),
             keys=["value_usd"],
@@ -64,7 +55,7 @@ with elements("GeoData"):
                 "legend": "Valor Acumulado (Millones USD)",
                 "legendPosition": "middle",
                 "legendOffset": 40,
-                "tickColor": "#FFFFFF",  # Color blanco para los ticks
+                "tickColor": "#FFFFFF",  # Ejes en blanco
             },
             axisLeft={
                 "tickSize": 5,
@@ -73,7 +64,7 @@ with elements("GeoData"):
                 "legend": "País",
                 "legendPosition": "middle",
                 "legendOffset": -70,
-                "tickColor": "#FFFFFF",  # Color blanco para los ticks
+                "tickColor": "#FFFFFF",  # Ejes en blanco
             },
             enableLabel=True,
             labelSkipWidth=12,
@@ -90,7 +81,7 @@ with elements("GeoData"):
                 }
             ],
             theme={
-                "textColor": "#FFFFFF",  # Texto en color blanco
+                "textColor": "#FFFFFF",  # Texto en blanco
                 "tooltip": {
                     "container": {
                         "background": "#333333",
@@ -98,5 +89,5 @@ with elements("GeoData"):
                     }
                 }
             },
-            sortByValue=True,  # Ordenar descendente
+            sortByValue=True,  # Ordenar en sentido descendente
         )
