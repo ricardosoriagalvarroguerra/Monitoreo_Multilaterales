@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 from streamlit_elements import elements, dashboard, nivo
 
+# Para usar la pantalla ancha (opcional)
+st.set_page_config(layout="wide")
+
 # Cargar los datos desde el archivo Parquet
 @st.cache_data
 def load_data():
@@ -11,7 +14,7 @@ data = load_data()
 
 # Sidebar para el filtro de Sector
 sector_filter = st.sidebar.selectbox(
-    "Selecciona un Sector", 
+    "Selecciona un Sector",
     options=["Todos"] + sorted(data["Sector"].dropna().unique().tolist())
 )
 
@@ -32,15 +35,46 @@ country_data = (
 # Convertir valores a millones
 country_data["value_usd"] = country_data["value_usd"] / 1e6
 
-# Crear el layout para el dashboard
-layout = [dashboard.Item("bar_chart", 0, 0, 8, 5)]  # Incrementar dimensiones
+# Definir el layout inicial del dashboard, con dimensiones más grandes.
+# w=8, h=5 son un punto de partida; ajústalo a tu gusto.
+layout = [
+    dashboard.Item(
+        item_id="bar_chart",
+        x=0,          # posición inicial columna
+        y=0,          # posición inicial fila
+        w=8,          # ancho en "columnas" del grid
+        h=6,          # alto en "filas" del grid
+        isDraggable=True,
+        isResizable=True
+    )
+]
 
-# Página principal
 st.title("GeoData Dashboard")
 
+# Uso de 'elements' para tu grid interactivo.
 with elements("GeoData"):
-    # Hacer el dashboard movible
+    # Añadimos la clase .drag-handle para hacer "arrastrable" el elemento por esa zona
     with dashboard.Grid(layout, draggableHandle=".drag-handle"):
+        
+        # Esta zona servirá como "manija" para arrastrar
+        # (puedes darle estilos CSS a tu gusto)
+        st.markdown(
+            """
+            <div class="drag-handle" 
+                 style="cursor: move; 
+                        background-color: #444444; 
+                        color: white;
+                        padding: 8px; 
+                        margin-bottom: 5px; 
+                        width: 100%;
+                        text-align: center;">
+                Arrastra aquí
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        
+        # Tu gráfico
         nivo.Bar(
             data=country_data.to_dict("records"),
             keys=["value_usd"],
@@ -56,7 +90,7 @@ with elements("GeoData"):
                 "legend": "Valor Acumulado (Millones USD)",
                 "legendPosition": "middle",
                 "legendOffset": 50,
-                "tickColor": "#FFFFFF",  # Color blanco para los ticks
+                "tickColor": "#FFFFFF",
             },
             axisLeft={
                 "tickSize": 5,
@@ -65,7 +99,7 @@ with elements("GeoData"):
                 "legend": "País",
                 "legendPosition": "middle",
                 "legendOffset": -70,
-                "tickColor": "#FFFFFF",  # Color blanco para los ticks
+                "tickColor": "#FFFFFF",
             },
             enableLabel=True,
             labelSkipWidth=12,
@@ -82,11 +116,11 @@ with elements("GeoData"):
                 }
             ],
             theme={
-                "textColor": "#FFFFFF",  # Texto en color blanco
+                "textColor": "#FFFFFF",
                 "tooltip": {
                     "container": {
                         "background": "#333333",
-                        "color": "#FFFFFF",  # Texto del tooltip en blanco
+                        "color": "#FFFFFF",
                     }
                 }
             },
