@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from streamlit_elements import elements, dashboard, nivo
+from streamlit_elements import elements, dashboard, nivo, mui
 
 # Cargar los datos desde el archivo Parquet
 @st.cache_data
@@ -30,18 +30,27 @@ country_data = (
 )
 
 # Crear el layout para el dashboard
-layout = [dashboard.Item("bar_chart", 0, 0, 70, 70)]  # Incrementar dimensiones aquí
+layout = [dashboard.Item("bar_chart", 0, 0, 12, 8)]  # Ajustar el tamaño aquí
 
 # Página principal
 st.title("GeoData Dashboard")
 
 with elements("GeoData"):
-    with dashboard.Grid(layout):
+    # Aplicar estilos para un contenedor más grande
+    with mui.Box(
+        sx={
+            "width": "100%",
+            "height": 500,  # Altura personalizada
+            "display": "flex",
+            "alignItems": "center",
+            "justifyContent": "center",
+        }
+    ):
         nivo.Bar(
             data=country_data.to_dict("records"),
             keys=["value_usd"],
             indexBy="recipientcountry_codename",
-            margin={"top": 50, "right": 100, "bottom": 150, "left": 150},  # Ajustar márgenes
+            margin={"top": 50, "right": 150, "bottom": 150, "left": 200},  # Márgenes ajustados
             padding=0.3,
             layout="horizontal",
             colors={"scheme": "nivo"},
