@@ -104,45 +104,69 @@ def descriptivo():
     st.write("Esta sección mostrará las estadísticas descriptivas, distribución de variables, etc.")
 
     # -------------------------------------------------------------------------
-    # Scatter Plot: Invertir ejes, convertir a millones y color personalizado
+    # DATAFRAME
     # -------------------------------------------------------------------------
-    
-    # 1) Cargar el dataframe desde el diccionario DATASETS
     df_desc = DATASETS["ACTIVITY_IADB"].copy()
     
-    # 2) Filtrar filas que tengan valores no nulos en 'value_usd' y 'project_duration_years'
-    df_desc = df_desc[df_desc["value_usd"].notna() & df_desc["project_duration_years"].notna()]
-    
-    # 3) Convertir 'value_usd' a millones
+    # Crear columna "value_usd_millions" y filtrar nulos
     df_desc["value_usd_millions"] = df_desc["value_usd"] / 1_000_000
+    df_desc = df_desc[
+        df_desc["project_duration_years"].notna() &
+        df_desc["value_usd_millions"].notna()
+    ]
 
-    # 4) Crear scatter plot con Plotly
-    #    - Eje X: project_duration_years
-    #    - Eje Y: value_usd_millions
-    #    - Color: #023e8a (mismo color para todos los puntos)
-    fig_scatter = px.scatter(
-        df_desc,
-        x="project_duration_years",
-        y="value_usd_millions",
-        title="Aprobaciones Vs Año de vida del Proyecto",
-        labels={
-            "project_duration_years": "Duración del Proyecto (años)",
-            "value_usd_millions": "Value (Millones USD)"
-        },
-        color_discrete_sequence=["#023e8a"]  # Color de los puntos
-    )
-    
-    # Ajustes de estilo (fondo oscuro)
-    fig_scatter.update_layout(
-        font_color="#FFFFFF",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(showgrid=False),
-        yaxis=dict(showgrid=False)
-    )
-    
-    # 5) Mostrar en Streamlit
-    st.plotly_chart(fig_scatter, use_container_width=True)
+    # -------------------------------------------------------------------------
+    # COLUMNA 1: Scatter Plot 1 (X=project_duration_years, Y=value_usd_millions)
+    # -------------------------------------------------------------------------
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Aprobaciones Vs Año de vida del Proyecto")
+        fig_scatter1 = px.scatter(
+            df_desc,
+            x="project_duration_years",
+            y="value_usd_millions",
+            labels={
+                "project_duration_years": "Duración del Proyecto (años)",
+                "value_usd_millions": "Value (Millones USD)"
+            },
+            color_discrete_sequence=["#00b4d8"]
+        )
+        fig_scatter1.update_layout(
+            font_color="#FFFFFF",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(showgrid=False),
+            yaxis=dict(showgrid=False)
+        )
+        st.plotly_chart(fig_scatter1, use_container_width=True)
+
+    # -------------------------------------------------------------------------
+    # COLUMNA 2: Scatter Plot 2 (X=completion_delay_years, Y=value_usd_millions)
+    # -------------------------------------------------------------------------
+    with col2:
+        st.subheader("Aprobaciones Vs Atraso en la Finalización")
+        # Filtramos nulos adicionales para completion_delay_years
+        df_desc2 = df_desc[df_desc["completion_delay_years"].notna()].copy()
+
+        fig_scatter2 = px.scatter(
+            df_desc2,
+            x="completion_delay_years",
+            y="value_usd_millions",
+            labels={
+                "completion_delay_years": "Atraso en Finalización (años)",
+                "value_usd_millions": "Value (Millones USD)"
+            },
+            color_discrete_sequence=["#00b4d8"]
+        )
+        fig_scatter2.update_layout(
+            font_color="#FFFFFF",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(showgrid=False),
+            yaxis=dict(showgrid=False)
+        )
+        st.plotly_chart(fig_scatter2, use_container_width=True)
 
 # -----------------------------------------------------------------------------
 # PÁGINA 2: SERIES TEMPORALES
