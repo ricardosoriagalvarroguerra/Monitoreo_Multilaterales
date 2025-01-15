@@ -56,8 +56,8 @@ class Dashboard:
                     "padding": padding,
                     "borderBottom": 1,
                     "borderColor": "divider",
-                    # Barra superior en color negro
-                    "backgroundColor": "#000000",
+                    # Al no definir "backgroundColor" aquí,
+                    # vuelve al color de fondo por defecto.
                 },
             ):
                 yield
@@ -91,18 +91,18 @@ class HorizontalBar(Dashboard.Item):
                 "textColor": "#FAFAFA",
                 "tooltip": {
                     "container": {
-                        "background": "#000000",
+                        "background": "#3F3F3F",
                         "color": "#FAFAFA",
                     }
                 }
             },
             "light": {
                 "background": "#FFFFFF",
-                "textColor": "#000000",
+                "textColor": "#31333F",
                 "tooltip": {
                     "container": {
                         "background": "#FFFFFF",
-                        "color": "#000000",
+                        "color": "#31333F",
                     }
                 }
             }
@@ -126,12 +126,11 @@ class HorizontalBar(Dashboard.Item):
                 "flexDirection": "column",
                 "borderRadius": 3,
                 "overflow": "hidden",
-                # Borde negro para todo el contenedor
-                "border": "2px solid #000000",
+                # Sin "border" extra, vuelve al aspecto original.
             },
             elevation=1
         ):
-            # Barra de título (manija) -> color #000000 (definido en title_bar)
+            # Barra de título (manija)
             with self.title_bar():
                 mui.icon.BarChart()
                 mui.Typography("Horizontal Bar (Millones, Asc)", sx={"flex": 1})
@@ -200,7 +199,7 @@ class HorizontalBar(Dashboard.Item):
 ###############################################################################
 def main():
     st.set_page_config(layout="wide")
-    st.title("Horizontal Bar Chart: Montos a Millones, Orden Ascendente")
+    st.title("Horizontal Bar Chart: Montos a Millones, Orden Ascendente (Color original)")
 
     # 1) Cargar dataset
     df = pd.read_parquet("unique_locations.parquet")
