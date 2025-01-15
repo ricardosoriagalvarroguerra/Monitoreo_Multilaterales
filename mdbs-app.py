@@ -253,86 +253,88 @@ def descriptivo():
             st.plotly_chart(fig2, use_container_width=True)
 
     # -------------------------------------------------------------------------
-    # BOX PLOT 1 (Modalidad vs Duración Estimada) - SIN FILTROS
+    # TABSET PARA LOS DOS BOX PLOTS (SIN FILTROS)
     # -------------------------------------------------------------------------
     st.markdown("---")
-    st.markdown("### Box Plot (Modalidad vs Duración Estimada)")
+    st.markdown("### Box Plots")
 
-    df_box = DATASETS["ACTIVITY_IADB"].copy()  # sin filtros
+    df_box = DATASETS["ACTIVITY_IADB"].copy()  # Datos sin filtros
 
-    needed_cols_box = {"modalidad_general", "duracion_estimada"}
-    if not needed_cols_box.issubset(df_box.columns):
-        st.warning(f"Faltan columnas para el box plot (modalidad vs duración): {needed_cols_box - set(df_box.columns)}")
-    else:
-        df_boxplot = df_box[
-            df_box["modalidad_general"].notna() &
-            df_box["duracion_estimada"].notna()
-        ].copy()
+    tab_modalidad, tab_sector = st.tabs(["Modalidad", "Sector"])
 
-        fig_box = px.box(
-            df_boxplot,
-            x="modalidad_general",
-            y="duracion_estimada",
-            labels={
-                "modalidad_general": "Modalidad General",
-                "duracion_estimada": "Duración Estimada (años)"
-            },
-            title="Distribución de Duración Estimada por Modalidad",
-            color_discrete_sequence=["#ef233c"]  # <-- nuevo color
-        )
-        # Ajustes de layout para modo oscuro
-        fig_box.update_layout(
-            font_color="#FFFFFF",
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(showgrid=False),
-            yaxis=dict(showgrid=False)
-        )
-        st.plotly_chart(fig_box, use_container_width=True)
+    # -------------------- BOX PLOT 1: Modalidad vs Duración Estimada
+    with tab_modalidad:
+        st.subheader("Box Plot (Modalidad vs Duración Estimada)")
+        needed_cols_box = {"modalidad_general", "duracion_estimada"}
+        if not needed_cols_box.issubset(df_box.columns):
+            st.warning(f"Faltan columnas para el box plot (modalidad vs duración): {needed_cols_box - set(df_box.columns)}")
+        else:
+            df_boxplot = df_box[
+                df_box["modalidad_general"].notna() &
+                df_box["duracion_estimada"].notna()
+            ].copy()
 
-    # -------------------------------------------------------------------------
-    # BOX PLOT 2 (Top 6 Sectores_1 por valor_usd)
-    # -------------------------------------------------------------------------
-    st.markdown("### Box Plot (Top 6 Sectores) vs Duración Estimada")
-    # 1) Asegurarnos de que existan las columnas "Sector_1" y "value_usd"
-    needed_cols_box2 = {"Sector_1", "value_usd", "duracion_estimada"}
-    if not needed_cols_box2.issubset(df_box.columns):
-        st.warning(f"Faltan columnas para el box plot (Sector vs duración): {needed_cols_box2 - set(df_box.columns)}")
-    else:
-        # 2) Determinar top 6 sectores según la suma de value_usd
-        df_agrupado = (
-            df_box.groupby("Sector_1", as_index=False)["value_usd"]
-            .sum()
-            .sort_values("value_usd", ascending=False)
-        )
-        top_6_sectores = df_agrupado["Sector_1"].head(6).tolist()
+            fig_box = px.box(
+                df_boxplot,
+                x="modalidad_general",
+                y="duracion_estimada",
+                labels={
+                    "modalidad_general": "Modalidad General",
+                    "duracion_estimada": "Duración Estimada (años)"
+                },
+                title="Distribución de Duración Estimada por Modalidad",
+                color_discrete_sequence=["#ef233c"]  # color
+            )
+            # Ajustes de estilo
+            fig_box.update_layout(
+                font_color="#FFFFFF",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=False)
+            )
+            st.plotly_chart(fig_box, use_container_width=True)
 
-        # 3) Filtrar el DF original solo con esos 6 sectores
-        df_box2 = df_box[
-            df_box["Sector_1"].isin(top_6_sectores) &
-            df_box["duracion_estimada"].notna()
-        ].copy()
+    # -------------------- BOX PLOT 2: Top 6 Sectores (Sector_1) vs Duración
+    with tab_sector:
+        st.subheader("Box Plot (Top 6 Sectores vs Duración Estimada)")
+        needed_cols_box2 = {"Sector_1", "value_usd", "duracion_estimada"}
+        if not needed_cols_box2.issubset(df_box.columns):
+            st.warning(f"Faltan columnas para el box plot (Sector vs duración): {needed_cols_box2 - set(df_box.columns)}")
+        else:
+            # Determinar top 6 sectores segun value_usd
+            df_agrupado = (
+                df_box.groupby("Sector_1", as_index=False)["value_usd"]
+                .sum()
+                .sort_values("value_usd", ascending=False)
+            )
+            top_6_sectores = df_agrupado["Sector_1"].head(6).tolist()
 
-        fig_box2 = px.box(
-            df_box2,
-            x="Sector_1",
-            y="duracion_estimada",
-            labels={
-                "Sector_1": "Sector (Top 6)",
-                "duracion_estimada": "Duración Estimada (años)"
-            },
-            title="Distribución de Duración Estimada - Top 6 Sectores (por Monto)",
-            color_discrete_sequence=["#ef233c"]
-        )
-        # Ajustes de layout para modo oscuro
-        fig_box2.update_layout(
-            font_color="#FFFFFF",
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(showgrid=False),
-            yaxis=dict(showgrid=False)
-        )
-        st.plotly_chart(fig_box2, use_container_width=True)
+            df_box2 = df_box[
+                df_box["Sector_1"].isin(top_6_sectores) &
+                df_box["duracion_estimada"].notna()
+            ].copy()
+
+            fig_box2 = px.box(
+                df_box2,
+                x="Sector_1",
+                y="duracion_estimada",
+                labels={
+                    "Sector_1": "Sector (Top 6)",
+                    "duracion_estimada": "Duración Estimada (años)"
+                },
+                title="Distribución de Duración Estimada - Top 6 Sectores (por Monto)",
+                color_discrete_sequence=["#ef233c"]
+            )
+            fig_box2.update_layout(
+                font_color="#FFFFFF",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=False)
+            )
+            st.plotly_chart(fig_box2, use_container_width=True)
+
 
 # -----------------------------------------------------------------------------
 # PÁGINA 2: SERIES TEMPORALES
