@@ -69,10 +69,9 @@ st.markdown(
 def load_dataframes():
     """
     Lee y devuelve los DataFrames usados en la aplicación.
-    Ajusta la ruta si tu archivo se llama distinto.
     """
-    df_activity = pd.read_parquet("activity_iadb.parquet")
-    
+    df_activity = pd.read_parquet("activity_iadb.parquet")  # Ajusta la ruta si es necesario
+
     datasets = {
         "ACTIVITY_IADB": df_activity
     }
@@ -100,15 +99,10 @@ def get_pyg_renderer_by_name(dataset_name: str):
 # FUNCIONES AUXILIARES (BOX PLOTS)
 # -----------------------------------------------------------------------------
 def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
-    """
-    Muestra dos box plots sobre 'modalidad_general':
-      1) X=modalidad_general, Y=duracion_estimada, color=#ef233c
-      2) X=modalidad_general, Y=completion_delay_years, color=#edf2f4
-    """
     needed_cols_m1 = {"modalidad_general", "duracion_estimada"}
     needed_cols_m2 = {"modalidad_general", "completion_delay_years"}
 
-    # Box Plot 1 (Duración Estimada)
+    # Box Plot 1 (duracion_estimada)
     if not needed_cols_m1.issubset(df.columns):
         st.warning(f"Faltan columnas para Modalidad (Duración Estimada): {needed_cols_m1 - set(df.columns)}")
     else:
@@ -137,7 +131,7 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
         )
         st.plotly_chart(fig_m1, use_container_width=True)
 
-    # Box Plot 2 (Completion Delay)
+    # Box Plot 2 (completion_delay_years)
     if not needed_cols_m2.issubset(df.columns):
         st.warning(f"Faltan columnas para Modalidad (Completion Delay): {needed_cols_m2 - set(df.columns)}")
     else:
@@ -168,11 +162,6 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
 
 
 def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
-    """
-    Muestra dos box plots sobre 'Sector_1' (Top 6 por value_usd):
-      1) X=Sector_1, Y=duracion_estimada, color=#ef233c
-      2) X=Sector_1, Y=completion_delay_years, color=#edf2f4
-    """
     needed_cols_s = {"Sector_1", "value_usd"}
     if not needed_cols_s.issubset(df.columns):
         st.warning(f"Faltan columnas para Sector (value_usd, Sector_1): {needed_cols_s - set(df.columns)}")
@@ -186,7 +175,7 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
     )
     top_sectores = df_agg["Sector_1"].head(6).tolist()
 
-    # 1) Box Plot (Duración Estimada)
+    # 1) Box Plot (duracion_estimada)
     needed_cols_s1 = {"Sector_1", "duracion_estimada"}
     if not needed_cols_s1.issubset(df.columns):
         st.warning(f"Faltan columnas para Sector (duracion_estimada): {needed_cols_s1 - set(df.columns)}")
@@ -216,7 +205,7 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
         )
         st.plotly_chart(fig_s1, use_container_width=True)
 
-    # 2) Box Plot (Completion Delay)
+    # 2) Box Plot (completion_delay_years)
     needed_cols_s2 = {"Sector_1", "completion_delay_years"}
     if not needed_cols_s2.issubset(df.columns):
         st.warning(f"Faltan columnas para Sector (completion_delay_years): {needed_cols_s2 - set(df.columns)}")
@@ -246,38 +235,30 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
         )
         st.plotly_chart(fig_s2, use_container_width=True)
 
-
 # -----------------------------------------------------------------------------
-# PÁGINA 1: DESCRIPTIVO
+# SUBPÁGINA 1: EJECUCIÓN
 # -----------------------------------------------------------------------------
-def descriptivo():
-    st.markdown('<h1 class="title">Descriptivo</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Análisis descriptivo de los datos.</p>', unsafe_allow_html=True)
+def subpagina_ejecucion():
+    st.markdown('<p class="subtitle">Vista de Ejecución</p>', unsafe_allow_html=True)
 
-    st.write("Sección con Scatter Plots (filtro) y Box Plots por Modalidad, Sector y Países.")
+    st.write("En esta subpágina, mostramos los **scatter plots** con filtros y **box plots** (Modalidad, Sector, Países).")
 
-    # -------------------------------------------------------------------------
-    # 1) SCATTER PLOTS (con filtros en la barra lateral)
-    # -------------------------------------------------------------------------
+    # =========================================================================
+    # SCATTER PLOTS (con filtros)
+    # =========================================================================
     df_filters = DATASETS["ACTIVITY_IADB"].copy()
 
-    st.sidebar.header("Filtros (Scatter Plots)")
-
-    # Filtro Sector_1
-    if "Sector_1" not in df_filters.columns:
-        st.sidebar.warning("No existe 'Sector_1'. Se omite filtro.")
-    else:
+    # Filtros en barra lateral
+    st.sidebar.subheader("Filtros (Ejecución)")
+    if "Sector_1" in df_filters.columns:
         opciones_sector = ["General"] + sorted(df_filters["Sector_1"].dropna().unique().tolist())
-        sel_sector = st.sidebar.selectbox("Sector_1", opciones_sector, index=0)
+        sel_sector = st.sidebar.selectbox("Sector_1 (Ejecución)", opciones_sector, index=0)
         if sel_sector != "General":
             df_filters = df_filters[df_filters["Sector_1"] == sel_sector]
 
-    # Filtro activityscope_codename
-    if "activityscope_codename" not in df_filters.columns:
-        st.sidebar.warning("No existe 'activityscope_codename'. Se omite filtro.")
-    else:
+    if "activityscope_codename" in df_filters.columns:
         opciones_scope = ["General"] + sorted(df_filters["activityscope_codename"].dropna().unique().tolist())
-        sel_scope = st.sidebar.selectbox("activityscope_codename", opciones_scope, index=0)
+        sel_scope = st.sidebar.selectbox("activityscope_codename (Ejecución)", opciones_scope, index=0)
         if sel_scope != "General":
             df_filters = df_filters[df_filters["activityscope_codename"] == sel_scope]
 
@@ -287,32 +268,30 @@ def descriptivo():
     else:
         df_filters["value_usd_millions"] = None
 
-    # Mostramos 2 scatter plots
+    # Scatter 1
     colA, colB = st.columns(2)
 
     with colA:
         st.subheader("Aprobaciones Vs Ejecución")
-        need_scatter1 = {"duracion_estimada", "completion_delay_years", "value_usd_millions"}
-        if not need_scatter1.issubset(df_filters.columns):
-            st.warning(f"No están todas las columnas {need_scatter1} para el primer scatter.")
-        else:
-            df_sc1 = df_filters[
+        needed_scat1 = {"duracion_estimada", "completion_delay_years", "value_usd_millions"}
+        if needed_scat1.issubset(df_filters.columns):
+            df_scat1 = df_filters[
                 df_filters["duracion_estimada"].notna() &
                 df_filters["completion_delay_years"].notna() &
                 df_filters["value_usd_millions"].notna()
             ].copy()
             fig_sc1 = px.scatter(
-                df_sc1,
+                df_scat1,
                 x="duracion_estimada",
                 y="completion_delay_years",
                 size="value_usd_millions",
                 color_discrete_sequence=["#00b4d8"],
-                title="Aprobaciones Vs Ejecución (Filtrado)",
                 labels={
                     "duracion_estimada": "Duración Estimada (años)",
                     "completion_delay_years": "Atraso (años)",
                     "value_usd_millions": "Value (Millones USD)"
-                }
+                },
+                title="Aprobaciones Vs Ejecución (Filtrado)"
             )
             fig_sc1.update_layout(
                 font_color="#FFFFFF",
@@ -322,37 +301,38 @@ def descriptivo():
                 yaxis=dict(showgrid=False)
             )
             st.plotly_chart(fig_sc1, use_container_width=True)
+        else:
+            st.warning(f"No se tienen todas las columnas para Scatter 1: {needed_scat1 - set(df_filters.columns)}")
 
+    # Scatter 2
     with colB:
         st.subheader("Planificación Vs Ejecución")
-        need_scatter2 = {"duracion_estimada", "duracion_real"}
-        if not need_scatter2.issubset(df_filters.columns):
-            st.warning(f"No están todas las columnas {need_scatter2} para el segundo scatter.")
-        else:
-            df_sc2 = df_filters[
+        needed_scat2 = {"duracion_estimada", "duracion_real"}
+        if needed_scat2.issubset(df_filters.columns):
+            df_scat2 = df_filters[
                 df_filters["duracion_estimada"].notna() &
                 df_filters["duracion_real"].notna()
             ].copy()
             fig_sc2 = px.scatter(
-                df_sc2,
+                df_scat2,
                 x="duracion_estimada",
                 y="duracion_real",
                 color_discrete_sequence=["#00b4d8"],
-                title="Planificación Vs Ejecución (Filtrado)",
                 labels={
                     "duracion_estimada": "Duración Estimada (años)",
                     "duracion_real": "Duración Real (años)"
-                }
+                },
+                title="Planificación Vs Ejecución (Filtrado)"
             )
-            # Línea punteada blanca (45°)
-            if not df_sc2.empty:
-                max_rango = max(df_sc2["duracion_estimada"].max(), df_sc2["duracion_real"].max())
+            # Línea punteada
+            if not df_scat2.empty:
+                max_val = max(df_scat2["duracion_estimada"].max(), df_scat2["duracion_real"].max())
                 fig_sc2.add_shape(
                     type="line",
                     x0=0,
                     y0=0,
-                    x1=max_rango,
-                    y1=max_rango,
+                    x1=max_val,
+                    y1=max_val,
                     line=dict(color="white", dash="dot")
                 )
             fig_sc2.update_layout(
@@ -363,32 +343,35 @@ def descriptivo():
                 yaxis=dict(showgrid=False)
             )
             st.plotly_chart(fig_sc2, use_container_width=True)
+        else:
+            st.warning(f"No se tienen todas las columnas para Scatter 2: {needed_scat2 - set(df_filters.columns)}")
 
-    # -------------------------------------------------------------------------
-    # 2) TABS PRINCIPALES: MODALIDAD, SECTOR, PAISES
-    # -------------------------------------------------------------------------
+    # =========================================================================
+    # BOX PLOTS (Global, sin filtros)
+    # =========================================================================
     st.markdown("---")
-    st.markdown("### Box Plots (sin filtros de arriba)")
+    st.markdown("### Box Plots (Modalidad, Sector, Países)")
 
     df_box = DATASETS["ACTIVITY_IADB"].copy()  # sin filtros
 
-    tab_modalidad, tab_sector, tab_paises = st.tabs(["Modalidad", "Sector", "Países"])
+    # Definimos 3 tabs: "Modalidad", "Sector", "Países"
+    tab_mod, tab_sec, tab_pais = st.tabs(["Modalidad", "Sector", "Países"])
 
-    # ===========================  TAB MODALIDAD  ==============================
-    with tab_modalidad:
+    # 1) MODALIDAD
+    with tab_mod:
         st.subheader("Box Plots - Modalidad (Global)")
         boxplot_modalidad(df_box, titulo_extra="(Global)")
 
-    # ===========================  TAB SECTOR  ==============================
-    with tab_sector:
+    # 2) SECTOR
+    with tab_sec:
         st.subheader("Box Plots - Sector (Global)")
         boxplot_sector(df_box, titulo_extra="(Global)")
 
-    # ===========================  TAB PAISES  ==============================
-    with tab_paises:
-        st.subheader("Box Plots - Países")
+    # 3) PAISES
+    with tab_pais:
+        st.subheader("Box Plots - Países (Subtabs)")
 
-        # Definimos sub-pestañas: Argentina, Bolivia, Brazil, Paraguay, Uruguay, 5-FP
+        # Subtabs: Arg, Bolivia, Brazil, Paraguay, Uruguay, 5-FP
         countries = {
             "Argentina": ["Argentina"],
             "Bolivia": ["Bolivia (Plurinational State of)"],
@@ -396,35 +379,53 @@ def descriptivo():
             "Paraguay": ["Paraguay"],
             "Uruguay": ["Uruguay"],
             "5-FP": [
-                "Argentina",
-                "Bolivia (Plurinational State of)",
-                "Brazil",
-                "Paraguay",
-                "Uruguay"
+                "Argentina", "Bolivia (Plurinational State of)",
+                "Brazil", "Paraguay", "Uruguay"
             ]
         }
-
         sub_tabs = st.tabs(list(countries.keys()))
 
         for i, (pais_tab, pais_list) in enumerate(countries.items()):
             with sub_tabs[i]:
-                st.write(f"**País(es):** {pais_list}")
-
-                # Filtrar df_box por el/los país(es)
-                df_country = df_box[
+                st.write(f"**País(es)**: {pais_list}")
+                df_pais = df_box[
                     df_box["recipientcountry_codename"].isin(pais_list)
                 ].copy()
-
-                # 1) Box Plots de Modalidad
+                # Modalidad
                 st.markdown("#### Modalidad")
-                boxplot_modalidad(df_country, titulo_extra=f"({pais_tab})")
+                boxplot_modalidad(df_pais, titulo_extra=f"({pais_tab})")
 
-                # 2) Box Plots de Sector
+                # Sector
                 st.markdown("#### Sector")
-                boxplot_sector(df_country, titulo_extra=f"({pais_tab})")
+                boxplot_sector(df_pais, titulo_extra=f"({pais_tab})")
+
 
 # -----------------------------------------------------------------------------
-# OTRAS PÁGINAS (PLACEHOLDER)
+# SUBPÁGINA 2: FLUJOS AGREGADOS
+# -----------------------------------------------------------------------------
+def subpagina_flujos_agregados():
+    st.markdown('<p class="subtitle">Flujos Agregados</p>', unsafe_allow_html=True)
+    st.write("Aquí podrías mostrar gráficos de montos totales, líneas de tiempo de desembolsos, etc.")
+    st.write("**Ejemplo placeholder**: Aún no implementado, personaliza según tus datos de flujos.")
+
+# -----------------------------------------------------------------------------
+# PÁGINA PRINCIPAL: DESCRIPTIVO (CON 2 SUBPÁGINAS)
+# -----------------------------------------------------------------------------
+def descriptivo():
+    st.markdown('<h1 class="title">Descriptivo</h1>', unsafe_allow_html=True)
+
+    # Añadimos un selectbox/radio en la barra lateral (o en el main) para subpáginas
+    # Aquí se elige en la parte principal para ejemplificar.
+    subpaginas = ["Ejecución", "Flujos Agregados"]
+    eleccion_sub = st.radio("Selecciona subpágina de Descriptivo:", subpaginas, index=0)
+
+    if eleccion_sub == "Ejecución":
+        subpagina_ejecucion()
+    else:
+        subpagina_flujos_agregados()
+
+# -----------------------------------------------------------------------------
+# OTRAS PÁGINAS (PLACEHOLDERS)
 # -----------------------------------------------------------------------------
 def series_temporales():
     st.markdown('<h1 class="title">Series Temporales</h1>', unsafe_allow_html=True)
@@ -452,7 +453,7 @@ def analisis_exploratorio():
     renderer.explorer()
 
 # -----------------------------------------------------------------------------
-# DICCIONARIO DE PÁGINAS
+# DICCIONARIO DE PÁGINAS (MENÚ PRINCIPAL)
 # -----------------------------------------------------------------------------
 PAGINAS = {
     "Descriptivo": descriptivo,
