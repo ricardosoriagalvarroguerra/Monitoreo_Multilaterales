@@ -273,8 +273,7 @@ def boxplot_montos(df: pd.DataFrame, titulo_extra: str = ""):
             labels={
                 "Sector_1": "Top 6 Sectores",
                 "value_usd_millions": "Value (Millones USD)"
-            },
-             points=False  # <--- OCULTAR outliers
+            }
         )
         fig_m1.update_layout(
             font_color="#FFFFFF",
