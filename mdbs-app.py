@@ -71,11 +71,8 @@ def load_dataframes():
     Lee y devuelve los DataFrames usados en la aplicación.
     Actualiza las rutas/parquet si es necesario.
     """
-
-    # Cargamos la BDD principal para 'activity_iadb.parquet'
     df_activity = pd.read_parquet("activity_iadb.parquet")
     
-    # Diccionario de DataFrames (puedes agregar más si los necesitas)
     datasets = {
         "ACTIVITY_IADB": df_activity
     }
@@ -107,26 +104,32 @@ def descriptivo():
     st.write("Esta sección mostrará las estadísticas descriptivas, distribución de variables, etc.")
 
     # -------------------------------------------------------------------------
-    # Ejemplo de SCATTER PLOT: value_usd vs project_duration_years
+    # Scatter Plot: Invertir ejes, convertir a millones y color personalizado
     # -------------------------------------------------------------------------
     
-    # 1) Cargar el dataframe desde tu diccionario DATASETS
+    # 1) Cargar el dataframe desde el diccionario DATASETS
     df_desc = DATASETS["ACTIVITY_IADB"].copy()
     
     # 2) Filtrar filas que tengan valores no nulos en 'value_usd' y 'project_duration_years'
     df_desc = df_desc[df_desc["value_usd"].notna() & df_desc["project_duration_years"].notna()]
     
-    # 3) Crear scatter plot con Plotly
+    # 3) Convertir 'value_usd' a millones
+    df_desc["value_usd_millions"] = df_desc["value_usd"] / 1_000_000
+
+    # 4) Crear scatter plot con Plotly
+    #    - Eje X: project_duration_years
+    #    - Eje Y: value_usd_millions
+    #    - Color: #023e8a (mismo color para todos los puntos)
     fig_scatter = px.scatter(
         df_desc,
-        x="value_usd",
-        y="project_duration_years",
+        x="project_duration_years",
+        y="value_usd_millions",
         title="Aprobaciones Vs Año de vida del Proyecto",
         labels={
-            "value_usd": "Value (USD)",
-            "project_duration_years": "Duración del Proyecto (años)"
-        }
-        # Si deseas, podrías usar color="algun_otro_campo" para colorear por otra variable
+            "project_duration_years": "Duración del Proyecto (años)",
+            "value_usd_millions": "Value (Millones USD)"
+        },
+        color_discrete_sequence=["#023e8a"]  # Color de los puntos
     )
     
     # Ajustes de estilo (fondo oscuro)
@@ -138,7 +141,7 @@ def descriptivo():
         yaxis=dict(showgrid=False)
     )
     
-    # 4) Mostrar en Streamlit
+    # 5) Mostrar en Streamlit
     st.plotly_chart(fig_scatter, use_container_width=True)
 
 # -----------------------------------------------------------------------------
@@ -185,8 +188,6 @@ def analisis_exploratorio():
     st.markdown('<p class="subtitle">Explora datos con PyGWalker (alto rendimiento).</p>', unsafe_allow_html=True)
 
     st.sidebar.header("Selecciona la BDD para analizar")
-    # En este ejemplo, solo hay 'ACTIVITY_IADB' en el diccionario, 
-    # pero podrías tener más datasets si deseas
     selected_dataset = st.sidebar.selectbox("Base de datos:", list(DATASETS.keys()))
 
     renderer = get_pyg_renderer_by_name(selected_dataset)
