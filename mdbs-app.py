@@ -255,7 +255,8 @@ def boxplot_montos(df: pd.DataFrame, titulo_extra: str = ""):
         top_sectores = df_agrupado["Sector_1"].head(6).tolist()
 
         # Filtrar a top 6
-        df_top6 = df_s[df_s["Sector_1"].isin(top_sectores]]
+        df_top6 = df_s[df_s["Sector_1"].isin(top_sectores)]
+
 
         fig_m1 = px.box(
             df_top6,
