@@ -105,7 +105,7 @@ def descriptivo():
     st.write("Esta sección mostrará las estadísticas descriptivas, distribución de variables, etc.")
 
     # -------------------------------------------------------------------------
-    # CARGA DEL DATAFRAME BASE
+    # CARGA DEL DATAFRAME BASE (para aplicar filtros)
     # -------------------------------------------------------------------------
     df_desc = DATASETS["ACTIVITY_IADB"].copy()
 
@@ -117,21 +117,18 @@ def descriptivo():
     # -------------------------------  
     # 1) FILTRO DE SECTOR_1
     # -------------------------------
-    # Si la columna "Sector_1" no está, mostramos advertencia pero no rompemos la app
     if "Sector_1" not in df_desc.columns:
         st.sidebar.warning("Columna 'Sector_1' no encontrada en el dataset. Se omitirá este filtro.")
     else:
-        # Lista de sectores únicos (sin nulos) + "General"
         sectores_unicos = sorted(df_desc["Sector_1"].dropna().unique().tolist())
         opciones_sector = ["General"] + sectores_unicos
 
         sector_seleccionado = st.sidebar.selectbox(
             "Selecciona un Sector (Sector_1):",
             options=opciones_sector,
-            index=0  # Por defecto = "General"
+            index=0
         )
 
-        # Si se selecciona algo distinto a "General", filtramos
         if sector_seleccionado != "General":
             df_desc = df_desc[df_desc["Sector_1"] == sector_seleccionado]
 
@@ -154,12 +151,12 @@ def descriptivo():
             df_desc = df_desc[df_desc["activityscope_codename"] == scope_seleccionado]
 
     # -------------------------------------------------------------------------
-    # CREAMOS COLUMNA "value_usd_millions" (si existe 'value_usd')
+    # CREAMOS COLUMNA "value_usd_millions" SI EXISTE 'value_usd'
     # -------------------------------------------------------------------------
     if "value_usd" in df_desc.columns:
         df_desc["value_usd_millions"] = df_desc["value_usd"] / 1_000_000
     else:
-        df_desc["value_usd_millions"] = None  # Evitar errores si no existe
+        df_desc["value_usd_millions"] = None
 
     # -------------------------------------------------------------------------
     # MOSTRAR GRÁFICOS (2 COLUMNAS)
@@ -255,6 +252,45 @@ def descriptivo():
             )
             st.plotly_chart(fig2, use_container_width=True)
 
+    # -------------------------------------------------------------------------
+    # NUEVO GRÁFICO 3: BOX PLOT (SIN FILTROS)
+    # -------------------------------------------------------------------------
+    st.markdown("---")
+    st.markdown("### Box Plot (Modalidad vs Duración Estimada)")
+
+    # Cargamos la versión ORIGINAL (sin filtros)
+    df_box = DATASETS["ACTIVITY_IADB"].copy()
+
+    needed_cols_3 = {"modalidad_general", "duracion_estimada"}
+    if not needed_cols_3.issubset(df_box.columns):
+        st.warning(f"Faltan columnas para el box plot: {needed_cols_3 - set(df_box.columns)}")
+    else:
+        # Eliminamos nulos
+        df_boxplot = df_box[
+            df_box["modalidad_general"].notna() &
+            df_box["duracion_estimada"].notna()
+        ].copy()
+
+        fig_box = px.box(
+            df_boxplot,
+            x="modalidad_general",
+            y="duracion_estimada",
+            labels={
+                "modalidad_general": "Modalidad General",
+                "duracion_estimada": "Duración Estimada (años)"
+            },
+            title="Distribución de Duración Estimada por Modalidad",
+        )
+        # Ajustes de layout para modo oscuro
+        fig_box.update_layout(
+            font_color="#FFFFFF",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(showgrid=False),
+            yaxis=dict(showgrid=False)
+        )
+        st.plotly_chart(fig_box, use_container_width=True)
+
 # -----------------------------------------------------------------------------
 # PÁGINA 2: SERIES TEMPORALES
 # -----------------------------------------------------------------------------
@@ -262,7 +298,6 @@ def series_temporales():
     st.markdown('<h1 class="title">Series Temporales</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora la evolución de los datos a lo largo del tiempo.</p>', unsafe_allow_html=True)
     st.write("Aquí podrías incluir gráficos de líneas, modelos ARIMA, predicciones, etc.")
-    # TODO: Implementar tus visualizaciones de series de tiempo
     
 # -----------------------------------------------------------------------------
 # PÁGINA 3: ANÁLISIS GEOSPACIAL
@@ -271,8 +306,7 @@ def analisis_geoespacial():
     st.markdown('<h1 class="title">Análisis Geoespacial</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Visualiza datos en el mapa, distribuciones geográficas, etc.</p>', unsafe_allow_html=True)
     st.write("Aquí iría el mapa interactivo y análisis geoespacial con folium o plotly.")
-    # TODO: Implementar lógica de mapas o análisis geoespacial
-
+    
 # -----------------------------------------------------------------------------
 # PÁGINA 4: MULTIDIMENSIONAL Y RELACIONES
 # -----------------------------------------------------------------------------
@@ -280,8 +314,7 @@ def multidimensional_y_relaciones():
     st.markdown('<h1 class="title">Multidimensional y Relaciones</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Análisis de relaciones entre variables, correlaciones, PCA, clustering, etc.</p>', unsafe_allow_html=True)
     st.write("Esta sección podría mostrar diagramas de correlación, factores, dendrogramas, etc.")
-    # TODO: Implementar lógica de análisis multivariante, correlaciones, PCA, etc.
-
+    
 # -----------------------------------------------------------------------------
 # PÁGINA 5: MODELOS
 # -----------------------------------------------------------------------------
@@ -289,8 +322,7 @@ def modelos():
     st.markdown('<h1 class="title">Modelos</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Entrena y evalúa modelos predictivos o de clasificación.</p>', unsafe_allow_html=True)
     st.write("Aquí se incluiría la lógica de entrenamiento, validación y métricas de modelos de ML/estadísticos.")
-    # TODO: Implementar pipelines de Machine Learning, métricas, etc.
-
+    
 # -----------------------------------------------------------------------------
 # PÁGINA 6: ANÁLISIS EXPLORATORIO (PYGWALKER)
 # -----------------------------------------------------------------------------
