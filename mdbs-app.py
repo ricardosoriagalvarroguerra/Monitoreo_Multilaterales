@@ -165,8 +165,6 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
     Muestra dos box plots:
       - X='Sector_1', Y='duracion_estimada'
       - X='Sector_1', Y='completion_delay_years'
-    (Se toman todos los sectores, sin top 6 en este caso. 
-     Si deseas top 6 aquí también, haz un filtrado similar a 'boxplot_montos'.)
     """
     needed_cols_s1 = {"Sector_1", "duracion_estimada"}
     needed_cols_s2 = {"Sector_1", "completion_delay_years"}
@@ -231,42 +229,50 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
 def boxplot_montos(df: pd.DataFrame, titulo_extra: str = ""):
     """
     Nueva pestaña "Montos": 
-      - Box Plot 1 (Top 6 Sector_1 en base a value_usd): X='Sector_1', Y='value_usd'
-      - Box Plot 2 (todas las modalidades): X='modalidad_general', Y='value_usd'
+      - Box Plot 1 (Top 6 Sector_1 en base a value_usd): 
+          X='Sector_1', Y='value_usd_millions'
+      - Box Plot 2 (todas las modalidades): 
+          X='modalidad_general', Y='value_usd_millions'
     """
     st.subheader(f"Box Plots de Montos {titulo_extra}")
 
-    # ============= BOX PLOT 1: TOP 6 SECTOR_1 por value_usd =============
-    needed_cols_s = {"Sector_1", "value_usd"}
+    # Primero creamos una columna con 'value_usd_millions' si no existe
+    if "value_usd" in df.columns:
+        df["value_usd_millions"] = df["value_usd"] / 1_000_000
+    else:
+        st.warning("No existe la columna 'value_usd' en el dataset.")
+        return
+
+    # ============= BOX PLOT 1: TOP 6 SECTOR_1 por 'value_usd_millions' =============
+    needed_cols_s = {"Sector_1", "value_usd_millions"}
     if not needed_cols_s.issubset(df.columns):
-        st.warning(f"Faltan columnas para Montos (Sector_1, value_usd): {needed_cols_s - set(df.columns)}")
+        st.warning(f"Faltan columnas para Montos (Sector_1, value_usd_millions).")
     else:
         df_s = df[
             df["Sector_1"].notna() &
-            df["value_usd"].notna()
+            df["value_usd_millions"].notna()
         ].copy()
 
         # Determinar Top 6
         df_agrupado = (
-            df_s.groupby("Sector_1", as_index=False)["value_usd"]
+            df_s.groupby("Sector_1", as_index=False)["value_usd_millions"]
             .sum()
-            .sort_values("value_usd", ascending=False)
+            .sort_values("value_usd_millions", ascending=False)
         )
         top_sectores = df_agrupado["Sector_1"].head(6).tolist()
 
         # Filtrar a top 6
         df_top6 = df_s[df_s["Sector_1"].isin(top_sectores)]
 
-
         fig_m1 = px.box(
             df_top6,
             x="Sector_1",
-            y="value_usd",
+            y="value_usd_millions",
             color_discrete_sequence=["#ef233c"],
-            title="Montos por Sector_1 (Top 6)",
+            title="Montos (Millones) por Sector_1 (Top 6)",
             labels={
                 "Sector_1": "Top 6 Sectores",
-                "value_usd": "Value USD"
+                "value_usd_millions": "Value (Millones USD)"
             }
         )
         fig_m1.update_layout(
@@ -278,25 +284,25 @@ def boxplot_montos(df: pd.DataFrame, titulo_extra: str = ""):
         )
         st.plotly_chart(fig_m1, use_container_width=True)
 
-    # ============= BOX PLOT 2: MODALIDAD_GENERAL vs value_usd =============
-    needed_cols_m = {"modalidad_general", "value_usd"}
+    # ============= BOX PLOT 2: MODALIDAD_GENERAL vs 'value_usd_millions' =============
+    needed_cols_m = {"modalidad_general", "value_usd_millions"}
     if not needed_cols_m.issubset(df.columns):
-        st.warning(f"Faltan columnas para Montos (modalidad_general, value_usd): {needed_cols_m - set(df.columns)}")
+        st.warning("Faltan columnas para Montos (modalidad_general, value_usd_millions).")
     else:
         df_m = df[
-            df["modalidad_general"].notna() & 
-            df["value_usd"].notna()
+            df["modalidad_general"].notna() &
+            df["value_usd_millions"].notna()
         ].copy()
 
         fig_m2 = px.box(
             df_m,
             x="modalidad_general",
-            y="value_usd",
+            y="value_usd_millions",
             color_discrete_sequence=["#edf2f4"],
-            title="Montos por Modalidad (todas las modalidades)",
+            title="Montos (Millones) por Modalidad (todas las modalidades)",
             labels={
                 "modalidad_general": "Modalidad General",
-                "value_usd": "Value USD"
+                "value_usd_millions": "Value (Millones USD)"
             }
         )
         fig_m2.update_layout(
