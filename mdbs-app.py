@@ -103,70 +103,100 @@ def descriptivo():
     st.markdown('<p class="subtitle">Análisis descriptivo de los datos.</p>', unsafe_allow_html=True)
     st.write("Esta sección mostrará las estadísticas descriptivas, distribución de variables, etc.")
 
-    # -------------------------------------------------------------------------
-    # DATAFRAME
-    # -------------------------------------------------------------------------
+    # Cargamos el dataframe base
     df_desc = DATASETS["ACTIVITY_IADB"].copy()
     
-    # Crear columna "value_usd_millions" y filtrar nulos
+    # Creamos columna de montos en millones
     df_desc["value_usd_millions"] = df_desc["value_usd"] / 1_000_000
-    df_desc = df_desc[
-        df_desc["project_duration_years"].notna() &
-        df_desc["value_usd_millions"].notna()
-    ]
 
     # -------------------------------------------------------------------------
-    # COLUMNA 1: Scatter Plot 1 (X=project_duration_years, Y=value_usd_millions)
+    # Creamos dos columnas para mostrar dos gráficos side-by-side
     # -------------------------------------------------------------------------
     col1, col2 = st.columns(2)
 
+    # -------------------------------------------------------------------------
+    # GRÁFICO 1: Aprobaciones Vs Ejecución
+    #    - X: duracion_estimada
+    #    - Y: completion_delay_years
+    #    - Tamaño del punto: value_usd_millions
+    # -------------------------------------------------------------------------
     with col1:
-        st.subheader("Aprobaciones Vs Año de vida del Proyecto")
-        fig_scatter1 = px.scatter(
-            df_desc,
-            x="project_duration_years",
-            y="value_usd_millions",
-            labels={
-                "project_duration_years": "Duración del Proyecto (años)",
-                "value_usd_millions": "Value (Millones USD)"
-            },
-            color_discrete_sequence=["#00b4d8"]
-        )
-        fig_scatter1.update_layout(
-            font_color="#FFFFFF",
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(showgrid=False),
-            yaxis=dict(showgrid=False)
-        )
-        st.plotly_chart(fig_scatter1, use_container_width=True)
+        st.subheader("Aprobaciones Vs Ejecución")
 
-    # -------------------------------------------------------------------------
-    # COLUMNA 2: Scatter Plot 2 (X=completion_delay_years, Y=value_usd_millions)
-    # -------------------------------------------------------------------------
-    with col2:
-        st.subheader("Aprobaciones Vs Atraso en la Finalización")
-        # Filtramos nulos adicionales para completion_delay_years
-        df_desc2 = df_desc[df_desc["completion_delay_years"].notna()].copy()
+        df_chart1 = df_desc[
+            df_desc["duracion_estimada"].notna() &
+            df_desc["completion_delay_years"].notna() &
+            df_desc["value_usd_millions"].notna()
+        ].copy()
 
-        fig_scatter2 = px.scatter(
-            df_desc2,
-            x="completion_delay_years",
-            y="value_usd_millions",
+        fig1 = px.scatter(
+            df_chart1,
+            x="duracion_estimada",
+            y="completion_delay_years",
+            size="value_usd_millions",  # Tamaño de los puntos
             labels={
+                "duracion_estimada": "Duración Estimada (años)",
                 "completion_delay_years": "Atraso en Finalización (años)",
                 "value_usd_millions": "Value (Millones USD)"
             },
+            title="Aprobaciones Vs Ejecución",
             color_discrete_sequence=["#00b4d8"]
         )
-        fig_scatter2.update_layout(
+        # Ajuste de layout para modo oscuro
+        fig1.update_layout(
             font_color="#FFFFFF",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             xaxis=dict(showgrid=False),
             yaxis=dict(showgrid=False)
         )
-        st.plotly_chart(fig_scatter2, use_container_width=True)
+        st.plotly_chart(fig1, use_container_width=True)
+
+    # -------------------------------------------------------------------------
+    # GRÁFICO 2: Planificación Vs Ejecución
+    #    - X: duracion_estimada
+    #    - Y: duracion_real
+    #    - Agregar línea de 45 grados (blanca, punteada)
+    # -------------------------------------------------------------------------
+    with col2:
+        st.subheader("Planificación Vs Ejecución")
+
+        df_chart2 = df_desc[
+            df_desc["duracion_estimada"].notna() &
+            df_desc["duracion_real"].notna()
+        ].copy()
+
+        fig2 = px.scatter(
+            df_chart2,
+            x="duracion_estimada",
+            y="duracion_real",
+            labels={
+                "duracion_estimada": "Duración Estimada (años)",
+                "duracion_real": "Duración Real (años)"
+            },
+            title="Planificación Vs Ejecución",
+            color_discrete_sequence=["#00b4d8"]
+        )
+        # Creamos la línea de 45 grados (punteada, blanca)
+        max_range = max(df_chart2["duracion_estimada"].max(), df_chart2["duracion_real"].max())
+        fig2.add_shape(
+            type="line",
+            x0=0,
+            y0=0,
+            x1=max_range,
+            y1=max_range,
+            line=dict(color="white", dash="dot")
+        )
+
+        # Ajuste de layout para modo oscuro
+        fig2.update_layout(
+            font_color="#FFFFFF",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(showgrid=False),
+            yaxis=dict(showgrid=False)
+        )
+        st.plotly_chart(fig2, use_container_width=True)
 
 # -----------------------------------------------------------------------------
 # PÁGINA 2: SERIES TEMPORALES
