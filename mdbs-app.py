@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 
 # streamlit-elements
-from streamlit_elements import elements, dashboard, mui, nivo, event
+from streamlit_elements import elements, dashboard, mui, nivo, sync
 
 ###############################################################################
 # 1. DASHBOARD
@@ -21,6 +21,7 @@ class Dashboard:
 
     @contextmanager
     def __call__(self, **props):
+        # Zona de arrastre = .draggable
         props["draggableHandle"] = f".{Dashboard.DRAGGABLE_CLASS}"
         with dashboard.Grid(self._layout, **props):
             yield
@@ -31,15 +32,17 @@ class Dashboard:
             self._draggable_class = Dashboard.DRAGGABLE_CLASS
             self._dark_mode = True
 
-            board._register(
-                dashboard.Item(self._key, x, y, w, h, **item_props)
-            )
+            # Se registra el item en el layout
+            board._register(dashboard.Item(self._key, x, y, w, h, **item_props))
 
         def _switch_theme(self):
             self._dark_mode = not self._dark_mode
 
         @contextmanager
         def title_bar(self, padding="5px 15px 5px 15px", dark_switcher=True):
+            """
+            Barra horizontal arrastrable (Stack) con la clase .draggable.
+            """
             with mui.Stack(
                 className=self._draggable_class,
                 alignItems="center",
@@ -52,6 +55,7 @@ class Dashboard:
                 },
             ):
                 yield
+                # Botones para cambiar el modo oscuro/claro
                 if dark_switcher:
                     if self._dark_mode:
                         mui.IconButton(mui.icon.DarkMode, onClick=self._switch_theme)
@@ -63,9 +67,15 @@ class Dashboard:
             raise NotImplementedError
 
 ###############################################################################
-# 2. HORIZONTAL BAR (con Montos en Millones, Orden Ascendente)
+# 2. HORIZONTAL BAR CHART
 ###############################################################################
 class HorizontalBar(Dashboard.Item):
+    """
+    Gráfico de barras horizontal usando Nivo:
+      - Eje Y: recipientcountry_codename
+      - Eje X: value_usd (en millones)
+    """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._theme = {
@@ -73,20 +83,14 @@ class HorizontalBar(Dashboard.Item):
                 "background": "#252526",
                 "textColor": "#FAFAFA",
                 "tooltip": {
-                    "container": {
-                        "background": "#3F3F3F",
-                        "color": "#FAFAFA",
-                    }
+                    "container": {"background": "#3F3F3F", "color": "#FAFAFA"},
                 }
             },
             "light": {
                 "background": "#FFFFFF",
                 "textColor": "#31333F",
                 "tooltip": {
-                    "container": {
-                        "background": "#FFFFFF",
-                        "color": "#31333F",
-                    }
+                    "container": {"background": "#FFFFFF", "color": "#31333F"},
                 }
             }
         }
@@ -153,9 +157,7 @@ class HorizontalBar(Dashboard.Item):
                             "effects": [
                                 {
                                     "on": "hover",
-                                    "style": {
-                                        "itemOpacity": 1
-                                    }
+                                    "style": {"itemOpacity": 1}
                                 }
                             ]
                         }
@@ -163,89 +165,82 @@ class HorizontalBar(Dashboard.Item):
                 )
 
 ###############################################################################
-# 3. MAIN
+# 3. MAIN APP
 ###############################################################################
 def main():
     st.set_page_config(layout="wide")
 
-    # Páginas disponibles
+    # Definir Páginas
     pages = ["GeoData", "OtraPágina"]
 
-    # Inicializar session_state si no existe
-    if "page" not in st.session_state:
-        st.session_state.page = "GeoData"
-    if "sector" not in st.session_state:
-        st.session_state.sector = ""
+    # Si no existen en session_state, inicializamos
+    if "page_select" not in st.session_state:
+        st.session_state.page_select = "GeoData"
+    if "sector_select" not in st.session_state:
+        st.session_state.sector_select = ""
 
-    # Leemos el dataset
+    # Leer dataset
     df = pd.read_parquet("unique_locations.parquet")
     sector_list = df["Sector"].dropna().unique().tolist()
 
-    # -----------------------------------------------------------------------------
-    # BARRA SUPERIOR (AppBar + Toolbar)
-    # -----------------------------------------------------------------------------
+    # --------------------------------------------------
+    # BARRA DE MENÚ (AppBar con 2 Select)
+    # --------------------------------------------------
     with elements("top_bar"):
         with mui.AppBar(position="static"):
             with mui.Toolbar:
-                # Título a la izquierda
                 mui.Typography("Mi App", variant="h6", sx={"flex": 1})
 
-                # Selector de Páginas
+                # Selector de página
+                # (usar key="page_select" para sincronizar en session_state)
                 with mui.Select(
-                    value=st.session_state.page,
-                    onChange=event.Event(key="page_select_event"),
-                    sx={"color": "#fff"}
+                    key="page_select",
+                    label="Páginas",
+                    variant="standard",
+                    defaultValue=st.session_state.page_select,
+                    sx={"color": "#fff"},
                 ):
                     for pg in pages:
                         mui.MenuItem(pg, value=pg)
 
-                # Selector de un Sector (solo 1 a la vez)
+                # Selector de un Sector
+                # (usar key="sector_select")
                 with mui.Select(
-                    value=st.session_state.sector,
-                    onChange=event.Event(key="sector_select_event"),
+                    key="sector_select",
+                    label="Sector",
+                    variant="standard",
+                    defaultValue=st.session_state.sector_select,
                     sx={"color": "#fff"},
                     displayEmpty=True
                 ):
-                    # Opción "vacía"
-                    mui.MenuItem("Elige un Sector", value="", disabled=True)
-
+                    mui.MenuItem("Elige un Sector", value="")
                     for sec in sector_list:
                         mui.MenuItem(sec, value=sec)
 
-    # Capturar los eventos de selección
-    page_evt = event.get("page_select_event")
-    sector_evt = event.get("sector_select_event")
+        # ¡Muy IMPORTANTE!: Para sincronizar con st.session_state
+        sync()
 
-    # Si hubo un evento de cambio de página
-    if page_evt:
-        # El valor seleccionado vendrá en page_evt.args["value"]
-        st.session_state.page = page_evt.args["value"]
-        st.experimental_rerun()
-
-    # Si hubo un evento de cambio de sector
-    if sector_evt:
-        st.session_state.sector = sector_evt.args["value"]
-        st.experimental_rerun()
-
-    # -----------------------------------------------------------------------------
+    # --------------------------------------------------
     # LÓGICA DE PÁGINAS
-    # -----------------------------------------------------------------------------
-    if st.session_state.page == "GeoData":
-        # Filtrar por sector si se seleccionó alguno
-        if st.session_state.sector:
-            df_filtered = df[df["Sector"] == st.session_state.sector]
+    # --------------------------------------------------
+    current_page = st.session_state.get("page_select", "GeoData")
+    current_sector = st.session_state.get("sector_select", "")
+
+    if current_page == "GeoData":
+        # Filtramos por sector, si se eligió uno
+        if current_sector:
+            df_filtered = df[df["Sector"] == current_sector]
         else:
             df_filtered = df
 
-        # Agrupar, convertir a millones y ordenar
+        # Agrupar, convertir a millones, ordenar
         df_grouped = df_filtered.groupby("recipientcountry_codename", as_index=False)["value_usd"].sum()
         df_grouped["value_usd"] = df_grouped["value_usd"] / 1_000_000
         df_grouped = df_grouped.sort_values("value_usd", ascending=True)
 
-        # Convertir a diccionario
         bar_data = df_grouped.to_dict(orient="records")
 
-        # Mostramos el gráfico en un dashboard
+        # Renderizamos el dashboard con el chart
         board = Dashboard()
         bar_item = HorizontalBar(board, x=0, y=0, w=6, h=5, isDraggable=True, isResizable=True)
 
@@ -253,15 +248,17 @@ def main():
             with board():
                 bar_item(bar_data)
 
+        # Cursor 'move'
         st.markdown("""
-        <style>
-        .draggable {
-            cursor: move;
-        }
-        </style>
+            <style>
+            .draggable {
+                cursor: move;
+            }
+            </style>
         """, unsafe_allow_html=True)
 
     else:
+        # Página "OtraPágina"
         st.write("Esta es la página 'OtraPágina'. ¡Contenido alternativo aquí!")
 
 
