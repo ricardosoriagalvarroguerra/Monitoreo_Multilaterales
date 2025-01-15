@@ -91,7 +91,7 @@ class HorizontalBar(Dashboard.Item):
                 "textColor": "#FAFAFA",
                 "tooltip": {
                     "container": {
-                        "background": "#3F3F3F",
+                        "background": "#000000",
                         "color": "#FAFAFA",
                     }
                 }
