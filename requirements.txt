@@ -3,3 +3,4 @@ streamlit-elements
 plotly
 pandas
 pygwalker
+folium
