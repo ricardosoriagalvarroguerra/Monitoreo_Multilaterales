@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import json
 from uuid import uuid4
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
@@ -22,7 +21,6 @@ class Dashboard:
 
     @contextmanager
     def __call__(self, **props):
-        # Zona de arrastre = .draggable
         props["draggableHandle"] = f".{Dashboard.DRAGGABLE_CLASS}"
         with dashboard.Grid(self._layout, **props):
             yield
@@ -42,9 +40,6 @@ class Dashboard:
 
         @contextmanager
         def title_bar(self, padding="5px 15px 5px 15px", dark_switcher=True):
-            """
-            Barra horizontal arrastrable (Stack) con clase .draggable.
-            """
             with mui.Stack(
                 className=self._draggable_class,
                 alignItems="center",
@@ -71,12 +66,6 @@ class Dashboard:
 # 2. HORIZONTAL BAR (con Montos en Millones, Orden Ascendente)
 ###############################################################################
 class HorizontalBar(Dashboard.Item):
-    """
-    Gráfico de barras horizontal usando Nivo.
-      - Eje Y: recipientcountry_codename
-      - Eje X: value_usd (millones)
-    """
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._theme = {
@@ -179,87 +168,84 @@ class HorizontalBar(Dashboard.Item):
 def main():
     st.set_page_config(layout="wide")
 
-    # Definir PÁGINAS disponibles
+    # Páginas disponibles
     pages = ["GeoData", "OtraPágina"]
 
-    # Inicializar st.session_state para 'page' y 'sector' si no existen
+    # Inicializar session_state si no existe
     if "page" not in st.session_state:
-        st.session_state.page = "GeoData"  # Página inicial
+        st.session_state.page = "GeoData"
     if "sector" not in st.session_state:
-        st.session_state.sector = None
+        st.session_state.sector = ""
 
-    # Leer dataset
+    # Leemos el dataset
     df = pd.read_parquet("unique_locations.parquet")
     sector_list = df["Sector"].dropna().unique().tolist()
 
-    # --- Callbacks para actualizar st.session_state desde la UI con event.Select ---
-    def handle_page_change(new_page):
-        st.session_state.page = new_page
-
-    def handle_sector_change(new_sector):
-        st.session_state.sector = new_sector
-
-    # Crear la barra de MENÚ superior (AppBar) con:
-    #   - Un desplegable para la página.
-    #   - Un desplegable para el sector.
+    # -----------------------------------------------------------------------------
+    # BARRA SUPERIOR (AppBar + Toolbar)
+    # -----------------------------------------------------------------------------
     with elements("top_bar"):
         with mui.AppBar(position="static"):
             with mui.Toolbar:
+                # Título a la izquierda
                 mui.Typography("Mi App", variant="h6", sx={"flex": 1})
 
-                # Menu desplegable de "Páginas"
+                # Selector de Páginas
                 with mui.Select(
-                    st.session_state.page,
-                    event.Select(
-                        events=["onChange"],
-                        args_schema=["value"],  # "value" es lo que viene del JS
-                        # Llamamos a la función handle_page_change(value)
-                        on_event=lambda args: handle_page_change(args["value"]),
-                    ),
-                    sx={"color": "#fff"},  # texto blanco sobre la AppBar
+                    value=st.session_state.page,
+                    onChange=event.Event(key="page_select_event"),
+                    sx={"color": "#fff"}
                 ):
                     for pg in pages:
                         mui.MenuItem(pg, value=pg)
 
-                # Menu desplegable para "Sector"
+                # Selector de un Sector (solo 1 a la vez)
                 with mui.Select(
-                    st.session_state.sector if st.session_state.sector else "",  # valor actual
-                    event.Select(
-                        events=["onChange"],
-                        args_schema=["value"],
-                        on_event=lambda args: handle_sector_change(args["value"]),
-                    ),
+                    value=st.session_state.sector,
+                    onChange=event.Event(key="sector_select_event"),
                     sx={"color": "#fff"},
-                    displayEmpty=True  # Para mostrar un placeholder si no se ha elegido nada
+                    displayEmpty=True
                 ):
-                    # Placeholder ("Elige un Sector") si st.session_state.sector es None
+                    # Opción "vacía"
                     mui.MenuItem("Elige un Sector", value="", disabled=True)
 
-                    # Para un solo sector a la vez, no hay multiselect: con MUI es normal
                     for sec in sector_list:
                         mui.MenuItem(sec, value=sec)
 
-    # --- Lógica para renderizar la página seleccionada ---
+    # Capturar los eventos de selección
+    page_evt = event.get("page_select_event")
+    sector_evt = event.get("sector_select_event")
+
+    # Si hubo un evento de cambio de página
+    if page_evt:
+        # El valor seleccionado vendrá en page_evt.args["value"]
+        st.session_state.page = page_evt.args["value"]
+        st.experimental_rerun()
+
+    # Si hubo un evento de cambio de sector
+    if sector_evt:
+        st.session_state.sector = sector_evt.args["value"]
+        st.experimental_rerun()
+
+    # -----------------------------------------------------------------------------
+    # LÓGICA DE PÁGINAS
+    # -----------------------------------------------------------------------------
     if st.session_state.page == "GeoData":
-        # Aplica Filtro de Sector si se eligió alguno
+        # Filtrar por sector si se seleccionó alguno
         if st.session_state.sector:
             df_filtered = df[df["Sector"] == st.session_state.sector]
         else:
-            # Si no se eligió sector, mostramos todos
             df_filtered = df
 
-        # Agrupar, convertir a millones, ordenar
-        df_grouped = (
-            df_filtered
-            .groupby("recipientcountry_codename", as_index=False)["value_usd"]
-            .sum()
-        )
+        # Agrupar, convertir a millones y ordenar
+        df_grouped = df_filtered.groupby("recipientcountry_codename", as_index=False)["value_usd"].sum()
         df_grouped["value_usd"] = df_grouped["value_usd"] / 1_000_000
         df_grouped = df_grouped.sort_values("value_usd", ascending=True)
 
+        # Convertir a diccionario
         bar_data = df_grouped.to_dict(orient="records")
 
-        # Renderizamos el dashboard con el gráfico
+        # Mostramos el gráfico en un dashboard
         board = Dashboard()
         bar_item = HorizontalBar(board, x=0, y=0, w=6, h=5, isDraggable=True, isResizable=True)
 
@@ -268,16 +254,15 @@ def main():
                 bar_item(bar_data)
 
         st.markdown("""
-            <style>
-            .draggable {
-                cursor: move;
-            }
-            </style>
+        <style>
+        .draggable {
+            cursor: move;
+        }
+        </style>
         """, unsafe_allow_html=True)
 
     else:
-        # Cualquier otra página
-        st.write("Esta es la página 'OtraPágina'. Aquí iría otro contenido.")
+        st.write("Esta es la página 'OtraPágina'. ¡Contenido alternativo aquí!")
 
 
 if __name__ == "__main__":
