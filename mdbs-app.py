@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 from pygwalker.api.streamlit import StreamlitRenderer
 import pygwalker as pyg
 import folium
@@ -71,7 +70,7 @@ def load_dataframes():
     Lee y devuelve los DataFrames usados en la aplicación.
     Ajusta la ruta/parquet si es necesario.
     """
-    df_activity = pd.read_parquet("activity_iadb.parquet")  # Ajusta tu ruta
+    df_activity = pd.read_parquet("activity_iadb.parquet")  # Reemplaza con tu ruta si difiere
     datasets = {
         "ACTIVITY_IADB": df_activity
     }
@@ -84,6 +83,9 @@ DATASETS = load_dataframes()
 # -----------------------------------------------------------------------------
 @st.cache_resource
 def get_pyg_renderer_by_name(dataset_name: str):
+    """
+    Crea el objeto de PyGWalker para exploración de datos interactiva.
+    """
     from pygwalker.api.streamlit import StreamlitRenderer
     df = DATASETS[dataset_name]
     renderer = StreamlitRenderer(df, kernel_computation=True)
@@ -101,14 +103,11 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
     needed_cols_1 = {"modalidad_general", "duracion_estimada"}
     needed_cols_2 = {"modalidad_general", "completion_delay_years"}
 
-    # Box Plot 1 (duracion_estimada)
+    # Box Plot 1: Duración Estimada
     if not needed_cols_1.issubset(df.columns):
         st.warning(f"Faltan columnas para Modalidad (Duración Estimada): {needed_cols_1 - set(df.columns)}")
     else:
-        df_m1 = df[
-            df["modalidad_general"].notna() &
-            df["duracion_estimada"].notna()
-        ].copy()
+        df_m1 = df[df["modalidad_general"].notna() & df["duracion_estimada"].notna()].copy()
 
         fig_m1 = px.box(
             df_m1,
@@ -130,14 +129,11 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
         )
         st.plotly_chart(fig_m1, use_container_width=True)
 
-    # Box Plot 2 (completion_delay_years)
+    # Box Plot 2: Completion Delay
     if not needed_cols_2.issubset(df.columns):
         st.warning(f"Faltan columnas para Modalidad (Completion Delay): {needed_cols_2 - set(df.columns)}")
     else:
-        df_m2 = df[
-            df["modalidad_general"].notna() &
-            df["completion_delay_years"].notna()
-        ].copy()
+        df_m2 = df[df["modalidad_general"].notna() & df["completion_delay_years"].notna()].copy()
 
         fig_m2 = px.box(
             df_m2,
@@ -238,8 +234,6 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
         st.plotly_chart(fig_s2, use_container_width=True)
 
 # -----------------------------------------------------------------------------
-# SUBPÁGINAS DE DESCRIPTIVO
-# -----------------------------------------------------------------------------
 def subpagina_ejecucion():
     """
     Subpágina 'Ejecución' con:
@@ -251,7 +245,7 @@ def subpagina_ejecucion():
     """
     st.markdown('<p class="subtitle">Subpágina: Ejecución</p>', unsafe_allow_html=True)
 
-    # Cargamos el DF base para FILTROS
+    # 1) FILTROS
     df_filters = DATASETS["ACTIVITY_IADB"].copy()
     st.sidebar.subheader("Filtros (Ejecución)")
 
@@ -271,13 +265,13 @@ def subpagina_ejecucion():
         if sel_scope != "General":
             df_filters = df_filters[df_filters["activityscope_codename"] == sel_scope]
 
-    # Generar la columna value_usd_millions (size) si existe
+    # 2) Generar la columna value_usd_millions (para size en scatter)
     if "value_usd" in df_filters.columns:
         df_filters["value_usd_millions"] = df_filters["value_usd"] / 1_000_000
     else:
         df_filters["value_usd_millions"] = None
 
-    # ------------------------ SCATTER PLOTS ------------------------
+    # 3) SCATTER PLOTS
     colA, colB = st.columns(2)
 
     with colA:
@@ -286,32 +280,37 @@ def subpagina_ejecucion():
         if needed_cols_1.issubset(df_filters.columns):
             df_scat1 = df_filters[
                 df_filters["duracion_estimada"].notna() &
-                df_filters["completion_delay_years"].notna()
-            ]
-            # Size con 'value_usd_millions'
-            fig1 = px.scatter(
-                df_scat1,
-                x="duracion_estimada",
-                y="completion_delay_years",
-                size="value_usd_millions",  # <--- tamaño de punto
-                color_discrete_sequence=["#00b4d8"],
-                title="Aprobaciones Vs Ejecución (Filtrado)",
-                labels={
-                    "duracion_estimada": "Duración Estimada (años)",
-                    "completion_delay_years": "Atraso (años)",
-                    "value_usd_millions": "Value (Millones USD)"
-                }
-            )
-            fig1.update_layout(
-                font_color="#FFFFFF",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                xaxis=dict(showgrid=False),
-                yaxis=dict(showgrid=False)
-            )
-            st.plotly_chart(fig1, use_container_width=True)
+                df_filters["completion_delay_years"].notna() &
+                df_filters["value_usd_millions"].notna()
+            ].copy()
+
+            if df_scat1.empty:
+                st.warning("No hay datos disponibles para mostrar en 'Aprobaciones Vs Ejecución' después de aplicar los filtros.")
+            else:
+                fig1 = px.scatter(
+                    df_scat1,
+                    x="duracion_estimada",
+                    y="completion_delay_years",
+                    size="value_usd_millions",  # tamaño de punto basado en value_usd_millions
+                    color_discrete_sequence=["#00b4d8"],
+                    title="Aprobaciones Vs Ejecución (Filtrado)",
+                    labels={
+                        "duracion_estimada": "Duración Estimada (años)",
+                        "completion_delay_years": "Atraso (años)",
+                        "value_usd_millions": "Value (Millones USD)"
+                    }
+                )
+                fig1.update_layout(
+                    font_color="#FFFFFF",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    xaxis=dict(showgrid=False),
+                    yaxis=dict(showgrid=False)
+                )
+                st.plotly_chart(fig1, use_container_width=True)
         else:
-            st.warning(f"No existen todas las columnas para el primer scatter plot: {needed_cols_1 - set(df_filters.columns)}")
+            missing = needed_cols_1 - set(df_filters.columns)
+            st.warning(f"No existen todas las columnas para el primer scatter plot: {missing}")
 
     with colB:
         st.subheader("Planificación Vs Ejecución")
@@ -320,40 +319,45 @@ def subpagina_ejecucion():
             df_scat2 = df_filters[
                 df_filters["duracion_estimada"].notna() &
                 df_filters["duracion_real"].notna()
-            ]
-            fig2 = px.scatter(
-                df_scat2,
-                x="duracion_estimada",
-                y="duracion_real",
-                color_discrete_sequence=["#00b4d8"],
-                title="Planificación Vs Ejecución (Filtrado)",
-                labels={
-                    "duracion_estimada": "Duración Estimada (años)",
-                    "duracion_real": "Duración Real (años)"
-                }
-            )
-            if not df_scat2.empty:
-                mx = max(df_scat2["duracion_estimada"].max(), df_scat2["duracion_real"].max())
+            ].copy()
+
+            if df_scat2.empty:
+                st.warning("No hay datos disponibles para mostrar en 'Planificación Vs Ejecución' después de aplicar los filtros.")
+            else:
+                fig2 = px.scatter(
+                    df_scat2,
+                    x="duracion_estimada",
+                    y="duracion_real",
+                    color_discrete_sequence=["#00b4d8"],
+                    title="Planificación Vs Ejecución (Filtrado)",
+                    labels={
+                        "duracion_estimada": "Duración Estimada (años)",
+                        "duracion_real": "Duración Real (años)"
+                    }
+                )
+                # Línea punteada blanca (45°)
+                max_range = max(df_scat2["duracion_estimada"].max(), df_scat2["duracion_real"].max())
                 fig2.add_shape(
                     type="line",
                     x0=0,
                     y0=0,
-                    x1=mx,
-                    y1=mx,
+                    x1=max_range,
+                    y1=max_range,
                     line=dict(color="white", dash="dot")
                 )
-            fig2.update_layout(
-                font_color="#FFFFFF",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                xaxis=dict(showgrid=False),
-                yaxis=dict(showgrid=False)
-            )
-            st.plotly_chart(fig2, use_container_width=True)
+                fig2.update_layout(
+                    font_color="#FFFFFF",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    xaxis=dict(showgrid=False),
+                    yaxis=dict(showgrid=False)
+                )
+                st.plotly_chart(fig2, use_container_width=True)
         else:
-            st.warning(f"No existen todas las columnas para el segundo scatter plot: {needed_cols_2 - set(df_filters.columns)}")
+            missing = needed_cols_2 - set(df_filters.columns)
+            st.warning(f"No existen todas las columnas para el segundo scatter plot: {missing}")
 
-    # ------------------------ BOX PLOTS ------------------------
+    # 4) BOX PLOTS (Modalidad, Sector) - usando el mismo DF filtrado
     st.markdown("---")
     st.markdown("### Box Plots (Modalidad, Sector) - Filtrados")
 
@@ -370,7 +374,7 @@ def subpagina_ejecucion():
         boxplot_sector(df_box, titulo_extra="(Filtrado)")
 
 def subpagina_flujos_agregados():
-    """Subpágina 'Flujos Agregados'."""
+    """Subpágina 'Flujos Agregados' (placeholder)."""
     st.markdown('<p class="subtitle">Subpágina: Flujos Agregados</p>', unsafe_allow_html=True)
     st.write("Aquí podrías mostrar métricas o gráficos de flujos totales, aprobaciones vs desembolsos, etc.")
     st.info("Placeholder: Implementa la lógica que desees para Flujos Agregados.")
