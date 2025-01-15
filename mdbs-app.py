@@ -105,30 +105,38 @@ def descriptivo():
     st.write("Esta sección mostrará las estadísticas descriptivas, distribución de variables, etc.")
 
     # -------------------------------------------------------------------------
-    # BARRA LATERAL - FILTRO POR SECTOR
+    # BARRA LATERAL - FILTROS
     # -------------------------------------------------------------------------
     st.sidebar.header("Filtros (Descriptivo)")
     
     # Cargamos el dataframe base
     df_desc = DATASETS["ACTIVITY_IADB"].copy()
 
-    # Suponiendo que la columna de sector se llama 'sector'. Ajusta si se llama distinto.
-    # 1) Obtener lista de sectores (sin nulos) y ordenar alfabéticamente
-    sectores_disponibles = sorted(df_desc["sector"].dropna().unique().tolist())
-
-    # 2) Insertar la opción "General" al inicio
+    # 1) FILTRO DE SECTOR (single-select con opción "General")
+    sectores_disponibles = sorted(df_desc["Sector"].dropna().unique().tolist())
     sectores_opciones = ["General"] + sectores_disponibles
-
-    # 3) Selectbox para un solo valor
+    
     sector_seleccionado = st.sidebar.selectbox(
-        "Selecciona un sector:",
+        "Selecciona un Sector:",
         options=sectores_opciones,
-        index=0  # Por defecto "General"
+        index=0
+    )
+    
+    if sector_seleccionado != "General":
+        df_desc = df_desc[df_desc["Sector"] == sector_seleccionado]
+
+    # 2) FILTRO DE activityscope_codename (single-select con opción "General")
+    scopes_disponibles = sorted(df_desc["activityscope_codename"].dropna().unique().tolist())
+    scopes_opciones = ["General"] + scopes_disponibles
+
+    scope_seleccionado = st.sidebar.selectbox(
+        "Selecciona actividad (activityscope_codename):",
+        options=scopes_opciones,
+        index=0
     )
 
-    # 4) Filtrar si no es "General"
-    if sector_seleccionado != "General":
-        df_desc = df_desc[df_desc["sector"] == sector_seleccionado]
+    if scope_seleccionado != "General":
+        df_desc = df_desc[df_desc["activityscope_codename"] == scope_seleccionado]
 
     # -------------------------------------------------------------------------
     # CREAMOS COLUMNA "value_usd_millions"
@@ -136,19 +144,21 @@ def descriptivo():
     df_desc["value_usd_millions"] = df_desc["value_usd"] / 1_000_000
 
     # -------------------------------------------------------------------------
-    # GRÁFICO 1: Aprobaciones Vs Ejecución
+    # MOSTRAR GRÁFICOS (2 COLUMNAS)
     # -------------------------------------------------------------------------
-    df_chart1 = df_desc[
-        df_desc["duracion_estimada"].notna() &
-        df_desc["completion_delay_years"].notna() &
-        df_desc["value_usd_millions"].notna()
-    ].copy()
-
-    # Columnas para mostrar los dos gráficos lado a lado
     col1, col2 = st.columns(2)
 
+    # -------------------------------------------------------------------------
+    # GRÁFICO 1: Aprobaciones Vs Ejecución
+    # -------------------------------------------------------------------------
     with col1:
         st.subheader("Aprobaciones Vs Ejecución")
+
+        df_chart1 = df_desc[
+            df_desc["duracion_estimada"].notna() &
+            df_desc["completion_delay_years"].notna() &
+            df_desc["value_usd_millions"].notna()
+        ].copy()
 
         fig1 = px.scatter(
             df_chart1,
