@@ -4,3 +4,4 @@ plotly
 pandas
 pygwalker
 folium
+streamlit_folium
