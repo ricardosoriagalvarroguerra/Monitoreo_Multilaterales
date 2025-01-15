@@ -67,14 +67,17 @@ st.markdown(
 # -----------------------------------------------------------------------------
 @st.cache_data
 def load_dataframes():
-    """Lee y devuelve los DataFrames usados en la aplicación."""
-    # Aquí podrías adaptar tus rutas a los datasets que uses.
-    # Como ejemplo, se dejan los mismos nombres: 
-    df_iadb = pd.DataFrame({"Ejemplo": ["A", "B", "C"]})  # Placeholder
+    """
+    Lee y devuelve los DataFrames usados en la aplicación.
+    Actualiza las rutas/parquet si es necesario.
+    """
+
+    # Cargamos la BDD principal para 'activity_iadb.parquet'
+    df_activity = pd.read_parquet("activity_iadb.parquet")
     
-    # Diccionario de DataFrames
+    # Diccionario de DataFrames (puedes agregar más si los necesitas)
     datasets = {
-        "IADB_DASH_BDD": df_iadb
+        "ACTIVITY_IADB": df_activity
     }
     return datasets
 
@@ -85,6 +88,9 @@ DATASETS = load_dataframes()
 # -----------------------------------------------------------------------------
 @st.cache_resource
 def get_pyg_renderer_by_name(dataset_name: str) -> StreamlitRenderer:
+    """
+    Crea el objeto de PyGWalker para exploración de datos interactiva.
+    """
     df = DATASETS[dataset_name]
     renderer = StreamlitRenderer(
         df,
@@ -93,42 +99,94 @@ def get_pyg_renderer_by_name(dataset_name: str) -> StreamlitRenderer:
     return renderer
 
 # -----------------------------------------------------------------------------
-# NUEVAS PÁGINAS
+# PÁGINA 1: DESCRIPTIVO
 # -----------------------------------------------------------------------------
-
 def descriptivo():
     st.markdown('<h1 class="title">Descriptivo</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Análisis descriptivo de los datos.</p>', unsafe_allow_html=True)
     st.write("Esta sección mostrará las estadísticas descriptivas, distribución de variables, etc.")
 
+    # -------------------------------------------------------------------------
+    # Ejemplo de SCATTER PLOT: value_usd vs project_duration_years
+    # -------------------------------------------------------------------------
+    
+    # 1) Cargar el dataframe desde tu diccionario DATASETS
+    df_desc = DATASETS["ACTIVITY_IADB"].copy()
+    
+    # 2) Filtrar filas que tengan valores no nulos en 'value_usd' y 'project_duration_years'
+    df_desc = df_desc[df_desc["value_usd"].notna() & df_desc["project_duration_years"].notna()]
+    
+    # 3) Crear scatter plot con Plotly
+    fig_scatter = px.scatter(
+        df_desc,
+        x="value_usd",
+        y="project_duration_years",
+        title="Aprobaciones Vs Año de vida del Proyecto",
+        labels={
+            "value_usd": "Value (USD)",
+            "project_duration_years": "Duración del Proyecto (años)"
+        }
+        # Si deseas, podrías usar color="algun_otro_campo" para colorear por otra variable
+    )
+    
+    # Ajustes de estilo (fondo oscuro)
+    fig_scatter.update_layout(
+        font_color="#FFFFFF",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(showgrid=False),
+        yaxis=dict(showgrid=False)
+    )
+    
+    # 4) Mostrar en Streamlit
+    st.plotly_chart(fig_scatter, use_container_width=True)
+
+# -----------------------------------------------------------------------------
+# PÁGINA 2: SERIES TEMPORALES
+# -----------------------------------------------------------------------------
 def series_temporales():
     st.markdown('<h1 class="title">Series Temporales</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora la evolución de los datos a lo largo del tiempo.</p>', unsafe_allow_html=True)
     st.write("Aquí podrías incluir gráficos de líneas, modelos ARIMA, predicciones, etc.")
-
+    # TODO: Implementar tus visualizaciones de series de tiempo
+    
+# -----------------------------------------------------------------------------
+# PÁGINA 3: ANÁLISIS GEOSPACIAL
+# -----------------------------------------------------------------------------
 def analisis_geoespacial():
     st.markdown('<h1 class="title">Análisis Geoespacial</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Visualiza datos en el mapa, distribuciones geográficas, etc.</p>', unsafe_allow_html=True)
     st.write("Aquí iría el mapa interactivo y análisis geoespacial con folium o plotly.")
+    # TODO: Implementar lógica de mapas o análisis geoespacial
 
+# -----------------------------------------------------------------------------
+# PÁGINA 4: MULTIDIMENSIONAL Y RELACIONES
+# -----------------------------------------------------------------------------
 def multidimensional_y_relaciones():
     st.markdown('<h1 class="title">Multidimensional y Relaciones</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Análisis de relaciones entre variables, correlaciones, PCA, clustering, etc.</p>', unsafe_allow_html=True)
     st.write("Esta sección podría mostrar diagramas de correlación, factores, dendrogramas, etc.")
+    # TODO: Implementar lógica de análisis multivariante, correlaciones, PCA, etc.
 
+# -----------------------------------------------------------------------------
+# PÁGINA 5: MODELOS
+# -----------------------------------------------------------------------------
 def modelos():
     st.markdown('<h1 class="title">Modelos</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Entrena y evalúa modelos predictivos o de clasificación.</p>', unsafe_allow_html=True)
     st.write("Aquí se incluiría la lógica de entrenamiento, validación y métricas de modelos de ML/estadísticos.")
+    # TODO: Implementar pipelines de Machine Learning, métricas, etc.
 
 # -----------------------------------------------------------------------------
-# CONSERVAR "ANÁLISIS EXPLORATORIO" (PYGWALKER)
+# PÁGINA 6: ANÁLISIS EXPLORATORIO (PYGWALKER)
 # -----------------------------------------------------------------------------
 def analisis_exploratorio():
     st.markdown('<h1 class="title">Análisis Exploratorio</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora datos con PyGWalker (alto rendimiento).</p>', unsafe_allow_html=True)
 
     st.sidebar.header("Selecciona la BDD para analizar")
+    # En este ejemplo, solo hay 'ACTIVITY_IADB' en el diccionario, 
+    # pero podrías tener más datasets si deseas
     selected_dataset = st.sidebar.selectbox("Base de datos:", list(DATASETS.keys()))
 
     renderer = get_pyg_renderer_by_name(selected_dataset)
