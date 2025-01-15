@@ -98,11 +98,11 @@ class HorizontalBar(Dashboard.Item):
             },
             "light": {
                 "background": "#FFFFFF",
-                "textColor": "#31333F",
+                "textColor": "#000000",
                 "tooltip": {
                     "container": {
                         "background": "#FFFFFF",
-                        "color": "#31333F",
+                        "color": "#000000",
                     }
                 }
             }
