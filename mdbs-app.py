@@ -85,9 +85,6 @@ DATASETS = load_dataframes()
 # -----------------------------------------------------------------------------
 @st.cache_resource
 def get_pyg_renderer_by_name(dataset_name: str):
-    """
-    Crea el objeto de PyGWalker para exploración de datos interactiva.
-    """
     from pygwalker.api.streamlit import StreamlitRenderer
     df = DATASETS[dataset_name]
     renderer = StreamlitRenderer(
@@ -105,43 +102,60 @@ def descriptivo():
     st.write("Esta sección mostrará las estadísticas descriptivas, distribución de variables, etc.")
 
     # -------------------------------------------------------------------------
+    # Cargamos el dataframe base
+    # -------------------------------------------------------------------------
+    df_desc = DATASETS["ACTIVITY_IADB"].copy()
+
+    # -------------------------------------------------------------------------
     # BARRA LATERAL - FILTROS
     # -------------------------------------------------------------------------
     st.sidebar.header("Filtros (Descriptivo)")
-    
-    # Cargamos el dataframe base
-    df_desc = DATASETS["ACTIVITY_IADB"].copy()
 
-    # 1) FILTRO DE SECTOR (single-select con opción "General")
-    sectores_disponibles = sorted(df_desc["Sector"].dropna().unique().tolist())
-    sectores_opciones = ["General"] + sectores_disponibles
-    
-    sector_seleccionado = st.sidebar.selectbox(
-        "Selecciona un Sector:",
-        options=sectores_opciones,
-        index=0
-    )
-    
-    if sector_seleccionado != "General":
-        df_desc = df_desc[df_desc["Sector"] == sector_seleccionado]
+    # -------------------------------  
+    # 1) FILTRO DE SECTOR
+    # -------------------------------
+    if "Sector" not in df_desc.columns:
+        st.sidebar.warning("Columna 'Sector' no encontrada en el dataset. Se omitirá este filtro.")
+    else:
+        # Lista de sectores únicos (sin nulos) + "General"
+        sectores_unicos = sorted(df_desc["Sector"].dropna().unique().tolist())
+        opciones_sector = ["General"] + sectores_unicos
 
-    # 2) FILTRO DE activityscope_codename (single-select con opción "General")
-    scopes_disponibles = sorted(df_desc["activityscope_codename"].dropna().unique().tolist())
-    scopes_opciones = ["General"] + scopes_disponibles
+        sector_seleccionado = st.sidebar.selectbox(
+            "Selecciona un Sector:",
+            options=opciones_sector,
+            index=0  # Por defecto = "General"
+        )
 
-    scope_seleccionado = st.sidebar.selectbox(
-        "Selecciona actividad (activityscope_codename):",
-        options=scopes_opciones,
-        index=0
-    )
+        # Si se selecciona un sector distinto de "General", filtramos
+        if sector_seleccionado != "General":
+            df_desc = df_desc[df_desc["Sector"] == sector_seleccionado]
 
-    if scope_seleccionado != "General":
-        df_desc = df_desc[df_desc["activityscope_codename"] == scope_seleccionado]
+    # -------------------------------  
+    # 2) FILTRO DE activityscope_codename
+    # -------------------------------
+    if "activityscope_codename" not in df_desc.columns:
+        st.sidebar.warning("Columna 'activityscope_codename' no encontrada en el dataset. Se omitirá este filtro.")
+    else:
+        scopes_unicos = sorted(df_desc["activityscope_codename"].dropna().unique().tolist())
+        opciones_scope = ["General"] + scopes_unicos
+
+        scope_seleccionado = st.sidebar.selectbox(
+            "Selecciona un activityscope_codename:",
+            options=opciones_scope,
+            index=0
+        )
+
+        if scope_seleccionado != "General":
+            df_desc = df_desc[df_desc["activityscope_codename"] == scope_seleccionado]
 
     # -------------------------------------------------------------------------
-    # CREAMOS COLUMNA "value_usd_millions"
+    # CREAMOS COLUMNA "value_usd_millions" (puede no existir 'value_usd')
     # -------------------------------------------------------------------------
-    df_desc["value_usd_millions"] = df_desc["value_usd"] / 1_000_000
+    if "value_usd" in df_desc.columns:
+        df_desc["value_usd_millions"] = df_desc["value_usd"] / 1_000_000
+    else:
+        df_desc["value_usd_millions"] = None  # Para evitar errores si no existe
 
     # -------------------------------------------------------------------------
     # MOSTRAR GRÁFICOS (2 COLUMNAS)
@@ -154,34 +168,39 @@ def descriptivo():
     with col1:
         st.subheader("Aprobaciones Vs Ejecución")
 
-        df_chart1 = df_desc[
-            df_desc["duracion_estimada"].notna() &
-            df_desc["completion_delay_years"].notna() &
-            df_desc["value_usd_millions"].notna()
-        ].copy()
+        # Verificamos que las columnas necesarias existan
+        needed_cols_1 = {"duracion_estimada", "completion_delay_years", "value_usd_millions"}
+        if not needed_cols_1.issubset(df_desc.columns):
+            st.warning(f"Faltan columnas para el primer gráfico: {needed_cols_1 - set(df_desc.columns)}")
+        else:
+            df_chart1 = df_desc[
+                df_desc["duracion_estimada"].notna() &
+                df_desc["completion_delay_years"].notna() &
+                df_desc["value_usd_millions"].notna()
+            ].copy()
 
-        fig1 = px.scatter(
-            df_chart1,
-            x="duracion_estimada",
-            y="completion_delay_years",
-            size="value_usd_millions",  # Tamaño de los puntos
-            labels={
-                "duracion_estimada": "Duración Estimada (años)",
-                "completion_delay_years": "Atraso en Finalización (años)",
-                "value_usd_millions": "Value (Millones USD)"
-            },
-            title="Aprobaciones Vs Ejecución",
-            color_discrete_sequence=["#00b4d8"]
-        )
-        # Ajuste de layout para modo oscuro
-        fig1.update_layout(
-            font_color="#FFFFFF",
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(showgrid=False),
-            yaxis=dict(showgrid=False)
-        )
-        st.plotly_chart(fig1, use_container_width=True)
+            fig1 = px.scatter(
+                df_chart1,
+                x="duracion_estimada",
+                y="completion_delay_years",
+                size="value_usd_millions",  # Tamaño de los puntos
+                labels={
+                    "duracion_estimada": "Duración Estimada (años)",
+                    "completion_delay_years": "Atraso en Finalización (años)",
+                    "value_usd_millions": "Value (Millones USD)"
+                },
+                title="Aprobaciones Vs Ejecución",
+                color_discrete_sequence=["#00b4d8"]
+            )
+            # Ajuste de layout para modo oscuro
+            fig1.update_layout(
+                font_color="#FFFFFF",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=False)
+            )
+            st.plotly_chart(fig1, use_container_width=True)
 
     # -------------------------------------------------------------------------
     # GRÁFICO 2: Planificación Vs Ejecución
@@ -189,45 +208,49 @@ def descriptivo():
     with col2:
         st.subheader("Planificación Vs Ejecución")
 
-        df_chart2 = df_desc[
-            df_desc["duracion_estimada"].notna() &
-            df_desc["duracion_real"].notna()
-        ].copy()
+        needed_cols_2 = {"duracion_estimada", "duracion_real"}
+        if not needed_cols_2.issubset(df_desc.columns):
+            st.warning(f"Faltan columnas para el segundo gráfico: {needed_cols_2 - set(df_desc.columns)}")
+        else:
+            df_chart2 = df_desc[
+                df_desc["duracion_estimada"].notna() &
+                df_desc["duracion_real"].notna()
+            ].copy()
 
-        fig2 = px.scatter(
-            df_chart2,
-            x="duracion_estimada",
-            y="duracion_real",
-            labels={
-                "duracion_estimada": "Duración Estimada (años)",
-                "duracion_real": "Duración Real (años)"
-            },
-            title="Planificación Vs Ejecución",
-            color_discrete_sequence=["#00b4d8"]
-        )
-        # Línea de 45 grados (punteada, blanca)
-        max_range = max(
-            df_chart2["duracion_estimada"].max(),
-            df_chart2["duracion_real"].max()
-        )
-        fig2.add_shape(
-            type="line",
-            x0=0,
-            y0=0,
-            x1=max_range,
-            y1=max_range,
-            line=dict(color="white", dash="dot")
-        )
+            fig2 = px.scatter(
+                df_chart2,
+                x="duracion_estimada",
+                y="duracion_real",
+                labels={
+                    "duracion_estimada": "Duración Estimada (años)",
+                    "duracion_real": "Duración Real (años)"
+                },
+                title="Planificación Vs Ejecución",
+                color_discrete_sequence=["#00b4d8"]
+            )
+            # Línea de 45 grados (punteada, blanca)
+            max_range = max(
+                df_chart2["duracion_estimada"].max(),
+                df_chart2["duracion_real"].max()
+            )
+            fig2.add_shape(
+                type="line",
+                x0=0,
+                y0=0,
+                x1=max_range,
+                y1=max_range,
+                line=dict(color="white", dash="dot")
+            )
 
-        # Ajuste de layout para modo oscuro
-        fig2.update_layout(
-            font_color="#FFFFFF",
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(showgrid=False),
-            yaxis=dict(showgrid=False)
-        )
-        st.plotly_chart(fig2, use_container_width=True)
+            # Ajuste de layout para modo oscuro
+            fig2.update_layout(
+                font_color="#FFFFFF",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=False)
+            )
+            st.plotly_chart(fig2, use_container_width=True)
 
 # -----------------------------------------------------------------------------
 # PÁGINA 2: SERIES TEMPORALES
