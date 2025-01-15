@@ -85,6 +85,9 @@ DATASETS = load_dataframes()
 # -----------------------------------------------------------------------------
 @st.cache_resource
 def get_pyg_renderer_by_name(dataset_name: str):
+    """
+    Crea el objeto de PyGWalker para exploración de datos interactiva.
+    """
     from pygwalker.api.streamlit import StreamlitRenderer
     df = DATASETS[dataset_name]
     renderer = StreamlitRenderer(
@@ -102,7 +105,7 @@ def descriptivo():
     st.write("Esta sección mostrará las estadísticas descriptivas, distribución de variables, etc.")
 
     # -------------------------------------------------------------------------
-    # Cargamos el dataframe base
+    # CARGA DEL DATAFRAME BASE
     # -------------------------------------------------------------------------
     df_desc = DATASETS["ACTIVITY_IADB"].copy()
 
@@ -112,24 +115,25 @@ def descriptivo():
     st.sidebar.header("Filtros (Descriptivo)")
 
     # -------------------------------  
-    # 1) FILTRO DE SECTOR
+    # 1) FILTRO DE SECTOR_1
     # -------------------------------
-    if "Sector" not in df_desc.columns:
-        st.sidebar.warning("Columna 'Sector' no encontrada en el dataset. Se omitirá este filtro.")
+    # Si la columna "Sector_1" no está, mostramos advertencia pero no rompemos la app
+    if "Sector_1" not in df_desc.columns:
+        st.sidebar.warning("Columna 'Sector_1' no encontrada en el dataset. Se omitirá este filtro.")
     else:
         # Lista de sectores únicos (sin nulos) + "General"
-        sectores_unicos = sorted(df_desc["Sector"].dropna().unique().tolist())
+        sectores_unicos = sorted(df_desc["Sector_1"].dropna().unique().tolist())
         opciones_sector = ["General"] + sectores_unicos
 
         sector_seleccionado = st.sidebar.selectbox(
-            "Selecciona un Sector:",
+            "Selecciona un Sector (Sector_1):",
             options=opciones_sector,
             index=0  # Por defecto = "General"
         )
 
-        # Si se selecciona un sector distinto de "General", filtramos
+        # Si se selecciona algo distinto a "General", filtramos
         if sector_seleccionado != "General":
-            df_desc = df_desc[df_desc["Sector"] == sector_seleccionado]
+            df_desc = df_desc[df_desc["Sector_1"] == sector_seleccionado]
 
     # -------------------------------  
     # 2) FILTRO DE activityscope_codename
@@ -150,12 +154,12 @@ def descriptivo():
             df_desc = df_desc[df_desc["activityscope_codename"] == scope_seleccionado]
 
     # -------------------------------------------------------------------------
-    # CREAMOS COLUMNA "value_usd_millions" (puede no existir 'value_usd')
+    # CREAMOS COLUMNA "value_usd_millions" (si existe 'value_usd')
     # -------------------------------------------------------------------------
     if "value_usd" in df_desc.columns:
         df_desc["value_usd_millions"] = df_desc["value_usd"] / 1_000_000
     else:
-        df_desc["value_usd_millions"] = None  # Para evitar errores si no existe
+        df_desc["value_usd_millions"] = None  # Evitar errores si no existe
 
     # -------------------------------------------------------------------------
     # MOSTRAR GRÁFICOS (2 COLUMNAS)
@@ -168,7 +172,6 @@ def descriptivo():
     with col1:
         st.subheader("Aprobaciones Vs Ejecución")
 
-        # Verificamos que las columnas necesarias existan
         needed_cols_1 = {"duracion_estimada", "completion_delay_years", "value_usd_millions"}
         if not needed_cols_1.issubset(df_desc.columns):
             st.warning(f"Faltan columnas para el primer gráfico: {needed_cols_1 - set(df_desc.columns)}")
@@ -192,7 +195,7 @@ def descriptivo():
                 title="Aprobaciones Vs Ejecución",
                 color_discrete_sequence=["#00b4d8"]
             )
-            # Ajuste de layout para modo oscuro
+            # Ajustes de layout para modo oscuro
             fig1.update_layout(
                 font_color="#FFFFFF",
                 paper_bgcolor="rgba(0,0,0,0)",
@@ -242,7 +245,7 @@ def descriptivo():
                 line=dict(color="white", dash="dot")
             )
 
-            # Ajuste de layout para modo oscuro
+            # Ajustes de layout para modo oscuro
             fig2.update_layout(
                 font_color="#FFFFFF",
                 paper_bgcolor="rgba(0,0,0,0)",
