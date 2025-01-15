@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 
 # streamlit-elements
-from streamlit_elements import elements, dashboard, mui, nivo
+from streamlit_elements import elements, dashboard, mui, nivo, event
 
 ###############################################################################
 # 1. DASHBOARD
@@ -22,7 +22,7 @@ class Dashboard:
 
     @contextmanager
     def __call__(self, **props):
-        # Indicamos que .draggable será la zona de arrastre
+        # Zona de arrastre = .draggable
         props["draggableHandle"] = f".{Dashboard.DRAGGABLE_CLASS}"
         with dashboard.Grid(self._layout, **props):
             yield
@@ -33,19 +33,17 @@ class Dashboard:
             self._draggable_class = Dashboard.DRAGGABLE_CLASS
             self._dark_mode = True
 
-            # Registramos este ítem en el Dashboard
             board._register(
                 dashboard.Item(self._key, x, y, w, h, **item_props)
             )
 
         def _switch_theme(self):
-            """Cambiar entre modo oscuro y claro."""
             self._dark_mode = not self._dark_mode
 
         @contextmanager
         def title_bar(self, padding="5px 15px 5px 15px", dark_switcher=True):
             """
-            Barra horizontal arrastrable (Stack) con clase self._draggable_class.
+            Barra horizontal arrastrable (Stack) con clase .draggable.
             """
             with mui.Stack(
                 className=self._draggable_class,
@@ -56,12 +54,9 @@ class Dashboard:
                     "padding": padding,
                     "borderBottom": 1,
                     "borderColor": "divider",
-                    # Al no definir "backgroundColor" aquí,
-                    # vuelve al color de fondo por defecto.
                 },
             ):
                 yield
-
                 if dark_switcher:
                     if self._dark_mode:
                         mui.IconButton(mui.icon.DarkMode, onClick=self._switch_theme)
@@ -73,18 +68,17 @@ class Dashboard:
             raise NotImplementedError
 
 ###############################################################################
-# 2. HORIZONTAL BAR CHART (con Montos en Millones, Orden Ascendente)
+# 2. HORIZONTAL BAR (con Montos en Millones, Orden Ascendente)
 ###############################################################################
 class HorizontalBar(Dashboard.Item):
     """
-    Gráfico de barras horizontal usando Nivo, mostrando:
+    Gráfico de barras horizontal usando Nivo.
       - Eje Y: recipientcountry_codename
-      - Eje X: value_usd (en millones)
+      - Eje X: value_usd (millones)
     """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Definimos temas para modo oscuro / claro
         self._theme = {
             "dark": {
                 "background": "#252526",
@@ -109,16 +103,6 @@ class HorizontalBar(Dashboard.Item):
         }
 
     def __call__(self, data_dict):
-        """
-        data_dict: Lista de diccionarios, p.ej:
-            [
-                {
-                    "recipientcountry_codename": "País A",
-                    "value_usd": 123.45  # en millones
-                },
-                ...
-            ]
-        """
         with mui.Paper(
             key=self._key,
             sx={
@@ -126,19 +110,14 @@ class HorizontalBar(Dashboard.Item):
                 "flexDirection": "column",
                 "borderRadius": 3,
                 "overflow": "hidden",
-                # Sin "border" extra, vuelve al aspecto original.
             },
             elevation=1
         ):
-            # Barra de título (manija)
             with self.title_bar():
                 mui.icon.BarChart()
-                mui.Typography("Horizontal Bar (Millones, Asc)", sx={"flex": 1})
+                mui.Typography("GeoData: Horizontal Bar", sx={"flex": 1})
 
             with mui.Box(sx={"flex": 1, "minHeight": 0, "padding": "10px"}):
-                # Gráfico de barras horizontal
-                # 'keys=["value_usd"]' indica la columna con los valores
-                # 'indexBy="recipientcountry_codename"' para la categoría
                 nivo.Bar(
                     data=data_dict,
                     keys=["value_usd"],
@@ -199,50 +178,106 @@ class HorizontalBar(Dashboard.Item):
 ###############################################################################
 def main():
     st.set_page_config(layout="wide")
-    st.title("Horizontal Bar Chart: Montos a Millones, Orden Ascendente (Color original)")
 
-    # 1) Cargar dataset
+    # Definir PÁGINAS disponibles
+    pages = ["GeoData", "OtraPágina"]
+
+    # Inicializar st.session_state para 'page' y 'sector' si no existen
+    if "page" not in st.session_state:
+        st.session_state.page = "GeoData"  # Página inicial
+    if "sector" not in st.session_state:
+        st.session_state.sector = None
+
+    # Leer dataset
     df = pd.read_parquet("unique_locations.parquet")
-
-    # 2) Filtro de Sector
     sector_list = df["Sector"].dropna().unique().tolist()
-    selected_sectors = st.multiselect(
-        "Filtrar por Sector:",
-        sector_list,
-        default=sector_list
-    )
 
-    # 3) Filtrar DataFrame
-    df_filtered = df[df["Sector"].isin(selected_sectors)]
+    # --- Callbacks para actualizar st.session_state desde la UI con event.Select ---
+    def handle_page_change(new_page):
+        st.session_state.page = new_page
 
-    # 4) Agrupar por País, sumar value_usd
-    df_grouped = df_filtered.groupby("recipientcountry_codename", as_index=False)["value_usd"].sum()
+    def handle_sector_change(new_sector):
+        st.session_state.sector = new_sector
 
-    # 5) Convertir value_usd a millones
-    df_grouped["value_usd"] = df_grouped["value_usd"] / 1_000_000
+    # Crear la barra de MENÚ superior (AppBar) con:
+    #   - Un desplegable para la página.
+    #   - Un desplegable para el sector.
+    with elements("top_bar"):
+        with mui.AppBar(position="static"):
+            with mui.Toolbar:
+                mui.Typography("Mi App", variant="h6", sx={"flex": 1})
 
-    # 6) Orden ascendente por value_usd
-    df_grouped = df_grouped.sort_values("value_usd", ascending=True)
+                # Menu desplegable de "Páginas"
+                with mui.Select(
+                    st.session_state.page,
+                    event.Select(
+                        events=["onChange"],
+                        args_schema=["value"],  # "value" es lo que viene del JS
+                        # Llamamos a la función handle_page_change(value)
+                        on_event=lambda args: handle_page_change(args["value"]),
+                    ),
+                    sx={"color": "#fff"},  # texto blanco sobre la AppBar
+                ):
+                    for pg in pages:
+                        mui.MenuItem(pg, value=pg)
 
-    # 7) Pasar a diccionario
-    bar_data = df_grouped.to_dict(orient="records")
+                # Menu desplegable para "Sector"
+                with mui.Select(
+                    st.session_state.sector if st.session_state.sector else "",  # valor actual
+                    event.Select(
+                        events=["onChange"],
+                        args_schema=["value"],
+                        on_event=lambda args: handle_sector_change(args["value"]),
+                    ),
+                    sx={"color": "#fff"},
+                    displayEmpty=True  # Para mostrar un placeholder si no se ha elegido nada
+                ):
+                    # Placeholder ("Elige un Sector") si st.session_state.sector es None
+                    mui.MenuItem("Elige un Sector", value="", disabled=True)
 
-    # 8) Dashboard + Render
-    board = Dashboard()
-    bar_item = HorizontalBar(board, x=0, y=0, w=6, h=5, isDraggable=True, isResizable=True)
+                    # Para un solo sector a la vez, no hay multiselect: con MUI es normal
+                    for sec in sector_list:
+                        mui.MenuItem(sec, value=sec)
 
-    with elements("demo_dashboard"):
-        with board():
-            bar_item(bar_data)
+    # --- Lógica para renderizar la página seleccionada ---
+    if st.session_state.page == "GeoData":
+        # Aplica Filtro de Sector si se eligió alguno
+        if st.session_state.sector:
+            df_filtered = df[df["Sector"] == st.session_state.sector]
+        else:
+            # Si no se eligió sector, mostramos todos
+            df_filtered = df
 
-    # Estilo para el cursor "move"
-    st.markdown("""
-        <style>
-        .draggable {
-            cursor: move;
-        }
-        </style>
-    """, unsafe_allow_html=True)
+        # Agrupar, convertir a millones, ordenar
+        df_grouped = (
+            df_filtered
+            .groupby("recipientcountry_codename", as_index=False)["value_usd"]
+            .sum()
+        )
+        df_grouped["value_usd"] = df_grouped["value_usd"] / 1_000_000
+        df_grouped = df_grouped.sort_values("value_usd", ascending=True)
+
+        bar_data = df_grouped.to_dict(orient="records")
+
+        # Renderizamos el dashboard con el gráfico
+        board = Dashboard()
+        bar_item = HorizontalBar(board, x=0, y=0, w=6, h=5, isDraggable=True, isResizable=True)
+
+        with elements("geo_data"):
+            with board():
+                bar_item(bar_data)
+
+        st.markdown("""
+            <style>
+            .draggable {
+                cursor: move;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
+    else:
+        # Cualquier otra página
+        st.write("Esta es la página 'OtraPágina'. Aquí iría otro contenido.")
 
 
 if __name__ == "__main__":
