@@ -56,7 +56,8 @@ class Dashboard:
                     "padding": padding,
                     "borderBottom": 1,
                     "borderColor": "divider",
-                    "backgroundColor": "#000000",  # <--- COLOR NEGRO
+                    # Barra superior en color negro
+                    "backgroundColor": "#000000",
                 },
             ):
                 yield
@@ -124,17 +125,21 @@ class HorizontalBar(Dashboard.Item):
                 "display": "flex",
                 "flexDirection": "column",
                 "borderRadius": 3,
-                "overflow": "hidden"
+                "overflow": "hidden",
+                # Borde negro para todo el contenedor
+                "border": "2px solid #000000",
             },
             elevation=1
         ):
-            # Barra de título (manija) -> ¡ahora es #000000!
+            # Barra de título (manija) -> color #000000 (definido en title_bar)
             with self.title_bar():
                 mui.icon.BarChart()
                 mui.Typography("Horizontal Bar (Millones, Asc)", sx={"flex": 1})
 
             with mui.Box(sx={"flex": 1, "minHeight": 0, "padding": "10px"}):
                 # Gráfico de barras horizontal
+                # 'keys=["value_usd"]' indica la columna con los valores
+                # 'indexBy="recipientcountry_codename"' para la categoría
                 nivo.Bar(
                     data=data_dict,
                     keys=["value_usd"],
