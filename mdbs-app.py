@@ -84,10 +84,11 @@ DATASETS = load_dataframes()
 # 2. CREACIÓN DEL RENDERER DE PYGWALKER (CACHÉ)
 # -----------------------------------------------------------------------------
 @st.cache_resource
-def get_pyg_renderer_by_name(dataset_name: str) -> StreamlitRenderer:
+def get_pyg_renderer_by_name(dataset_name: str):
     """
     Crea el objeto de PyGWalker para exploración de datos interactiva.
     """
+    from pygwalker.api.streamlit import StreamlitRenderer
     df = DATASETS[dataset_name]
     renderer = StreamlitRenderer(
         df,
@@ -103,31 +104,51 @@ def descriptivo():
     st.markdown('<p class="subtitle">Análisis descriptivo de los datos.</p>', unsafe_allow_html=True)
     st.write("Esta sección mostrará las estadísticas descriptivas, distribución de variables, etc.")
 
+    # -------------------------------------------------------------------------
+    # BARRA LATERAL - FILTRO POR SECTOR
+    # -------------------------------------------------------------------------
+    st.sidebar.header("Filtros (Descriptivo)")
+    
     # Cargamos el dataframe base
     df_desc = DATASETS["ACTIVITY_IADB"].copy()
-    
-    # Creamos columna de montos en millones
+
+    # Suponiendo que la columna de sector se llama 'sector'. Ajusta si se llama distinto.
+    # 1) Obtener lista de sectores (sin nulos) y ordenar alfabéticamente
+    sectores_disponibles = sorted(df_desc["sector"].dropna().unique().tolist())
+
+    # 2) Insertar la opción "General" al inicio
+    sectores_opciones = ["General"] + sectores_disponibles
+
+    # 3) Selectbox para un solo valor
+    sector_seleccionado = st.sidebar.selectbox(
+        "Selecciona un sector:",
+        options=sectores_opciones,
+        index=0  # Por defecto "General"
+    )
+
+    # 4) Filtrar si no es "General"
+    if sector_seleccionado != "General":
+        df_desc = df_desc[df_desc["sector"] == sector_seleccionado]
+
+    # -------------------------------------------------------------------------
+    # CREAMOS COLUMNA "value_usd_millions"
+    # -------------------------------------------------------------------------
     df_desc["value_usd_millions"] = df_desc["value_usd"] / 1_000_000
 
     # -------------------------------------------------------------------------
-    # Creamos dos columnas para mostrar dos gráficos side-by-side
+    # GRÁFICO 1: Aprobaciones Vs Ejecución
     # -------------------------------------------------------------------------
+    df_chart1 = df_desc[
+        df_desc["duracion_estimada"].notna() &
+        df_desc["completion_delay_years"].notna() &
+        df_desc["value_usd_millions"].notna()
+    ].copy()
+
+    # Columnas para mostrar los dos gráficos lado a lado
     col1, col2 = st.columns(2)
 
-    # -------------------------------------------------------------------------
-    # GRÁFICO 1: Aprobaciones Vs Ejecución
-    #    - X: duracion_estimada
-    #    - Y: completion_delay_years
-    #    - Tamaño del punto: value_usd_millions
-    # -------------------------------------------------------------------------
     with col1:
         st.subheader("Aprobaciones Vs Ejecución")
-
-        df_chart1 = df_desc[
-            df_desc["duracion_estimada"].notna() &
-            df_desc["completion_delay_years"].notna() &
-            df_desc["value_usd_millions"].notna()
-        ].copy()
 
         fig1 = px.scatter(
             df_chart1,
@@ -154,9 +175,6 @@ def descriptivo():
 
     # -------------------------------------------------------------------------
     # GRÁFICO 2: Planificación Vs Ejecución
-    #    - X: duracion_estimada
-    #    - Y: duracion_real
-    #    - Agregar línea de 45 grados (blanca, punteada)
     # -------------------------------------------------------------------------
     with col2:
         st.subheader("Planificación Vs Ejecución")
@@ -177,8 +195,11 @@ def descriptivo():
             title="Planificación Vs Ejecución",
             color_discrete_sequence=["#00b4d8"]
         )
-        # Creamos la línea de 45 grados (punteada, blanca)
-        max_range = max(df_chart2["duracion_estimada"].max(), df_chart2["duracion_real"].max())
+        # Línea de 45 grados (punteada, blanca)
+        max_range = max(
+            df_chart2["duracion_estimada"].max(),
+            df_chart2["duracion_real"].max()
+        )
         fig2.add_shape(
             type="line",
             x0=0,
