@@ -166,7 +166,6 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
       - X='Sector_1', Y='duracion_estimada'
       - X='Sector_1', Y='completion_delay_years'
     """
-    # Verificamos que exista 'value_usd' para poder determinar el top 6
     if "value_usd" not in df.columns:
         st.warning("No existe la columna 'value_usd' para calcular top 6 sectores.")
         return
@@ -174,7 +173,7 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
     needed_cols_1 = {"Sector_1", "duracion_estimada"}
     needed_cols_2 = {"Sector_1", "completion_delay_years"}
 
-    # 1) Determinar Top 6 Sectores por sum(value_usd)
+    # Determinar Top 6 Sectores
     df_s = df[df["Sector_1"].notna() & df["value_usd"].notna()].copy()
     agrupado = (
         df_s.groupby("Sector_1", as_index=False)["value_usd"]
@@ -183,7 +182,7 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
     )
     top_6_sectores = agrupado["Sector_1"].head(6).tolist()
 
-    # Filtramos el DF para mantener solo los top 6
+    # Filtramos a top 6
     df_top6 = df[df["Sector_1"].isin(top_6_sectores)].copy()
 
     # Box Plot 1: Duración Estimada
@@ -244,13 +243,15 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
 def subpagina_ejecucion():
     """
     Subpágina 'Ejecución' con:
-      - Filtros (Sector_1, activityscope_codename)  <-- ya sin value_usd filter
-      - Scatter plots
+      - Filtros (Sector_1, activityscope_codename)
+      - Scatter plots: 
+         * "Aprobaciones Vs Ejecución" -> size de puntos en base a value_usd_millions
+         * "Planificación Vs Ejecución"
       - Box plots: Modalidad, Sector (Top 6)
     """
     st.markdown('<p class="subtitle">Subpágina: Ejecución</p>', unsafe_allow_html=True)
 
-    # 1) FILTROS
+    # Cargamos el DF base para FILTROS
     df_filters = DATASETS["ACTIVITY_IADB"].copy()
     st.sidebar.subheader("Filtros (Ejecución)")
 
@@ -270,26 +271,35 @@ def subpagina_ejecucion():
         if sel_scope != "General":
             df_filters = df_filters[df_filters["activityscope_codename"] == sel_scope]
 
-    # 2) SCATTER PLOTS (sin value_usd filter)
+    # Generar la columna value_usd_millions (size) si existe
+    if "value_usd" in df_filters.columns:
+        df_filters["value_usd_millions"] = df_filters["value_usd"] / 1_000_000
+    else:
+        df_filters["value_usd_millions"] = None
+
+    # ------------------------ SCATTER PLOTS ------------------------
     colA, colB = st.columns(2)
 
     with colA:
         st.subheader("Aprobaciones Vs Ejecución")
-        needed_cols_1 = {"duracion_estimada", "completion_delay_years"}
+        needed_cols_1 = {"duracion_estimada", "completion_delay_years", "value_usd_millions"}
         if needed_cols_1.issubset(df_filters.columns):
             df_scat1 = df_filters[
                 df_filters["duracion_estimada"].notna() &
                 df_filters["completion_delay_years"].notna()
             ]
+            # Size con 'value_usd_millions'
             fig1 = px.scatter(
                 df_scat1,
                 x="duracion_estimada",
                 y="completion_delay_years",
+                size="value_usd_millions",  # <--- tamaño de punto
                 color_discrete_sequence=["#00b4d8"],
                 title="Aprobaciones Vs Ejecución (Filtrado)",
                 labels={
                     "duracion_estimada": "Duración Estimada (años)",
-                    "completion_delay_years": "Atraso (años)"
+                    "completion_delay_years": "Atraso (años)",
+                    "value_usd_millions": "Value (Millones USD)"
                 }
             )
             fig1.update_layout(
@@ -301,7 +311,7 @@ def subpagina_ejecucion():
             )
             st.plotly_chart(fig1, use_container_width=True)
         else:
-            st.warning(f"No existen columnas requeridas: {needed_cols_1 - set(df_filters.columns)}")
+            st.warning(f"No existen todas las columnas para el primer scatter plot: {needed_cols_1 - set(df_filters.columns)}")
 
     with colB:
         st.subheader("Planificación Vs Ejecución")
@@ -341,13 +351,12 @@ def subpagina_ejecucion():
             )
             st.plotly_chart(fig2, use_container_width=True)
         else:
-            st.warning(f"No existen columnas requeridas: {needed_cols_2 - set(df_filters.columns)}")
+            st.warning(f"No existen todas las columnas para el segundo scatter plot: {needed_cols_2 - set(df_filters.columns)}")
 
-    # 3) BOX PLOTS (Modalidad, Sector) - sin Montos
+    # ------------------------ BOX PLOTS ------------------------
     st.markdown("---")
     st.markdown("### Box Plots (Modalidad, Sector) - Filtrados")
 
-    # Usamos DF filtrado para que las gráficas reflejen los filtros
     df_box = df_filters.copy()
 
     tab_mod, tab_sec = st.tabs(["Modalidad", "Sector"])
@@ -361,7 +370,7 @@ def subpagina_ejecucion():
         boxplot_sector(df_box, titulo_extra="(Filtrado)")
 
 def subpagina_flujos_agregados():
-    """Subpágina 'Flujos Agregados' (placeholder)."""
+    """Subpágina 'Flujos Agregados'."""
     st.markdown('<p class="subtitle">Subpágina: Flujos Agregados</p>', unsafe_allow_html=True)
     st.write("Aquí podrías mostrar métricas o gráficos de flujos totales, aprobaciones vs desembolsos, etc.")
     st.info("Placeholder: Implementa la lógica que desees para Flujos Agregados.")
