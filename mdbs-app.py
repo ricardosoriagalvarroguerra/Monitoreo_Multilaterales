@@ -69,9 +69,9 @@ st.markdown(
 def load_dataframes():
     """
     Lee y devuelve los DataFrames usados en la aplicación.
-    Ajusta la ruta si tu archivo se llama distinto.
+    Ajusta la ruta/parquet si es necesario.
     """
-    df_activity = pd.read_parquet("activity_iadb.parquet")  # Ajusta la ruta
+    df_activity = pd.read_parquet("activity_iadb.parquet")  # Reemplaza con tu ruta si difiere
     datasets = {
         "ACTIVITY_IADB": df_activity
     }
@@ -84,6 +84,9 @@ DATASETS = load_dataframes()
 # -----------------------------------------------------------------------------
 @st.cache_resource
 def get_pyg_renderer_by_name(dataset_name: str):
+    """
+    Crea el objeto de PyGWalker para exploración de datos interactiva.
+    """
     from pygwalker.api.streamlit import StreamlitRenderer
     df = DATASETS[dataset_name]
     renderer = StreamlitRenderer(df, kernel_computation=True)
@@ -101,14 +104,11 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
     needed_cols_m1 = {"modalidad_general", "duracion_estimada"}
     needed_cols_m2 = {"modalidad_general", "completion_delay_years"}
 
-    # Box Plot 1 (duracion_estimada)
+    # Box Plot 1: Duración Estimada
     if not needed_cols_m1.issubset(df.columns):
         st.warning(f"Faltan columnas para Modalidad (Duración Estimada): {needed_cols_m1 - set(df.columns)}")
     else:
-        df_m1 = df[
-            df["modalidad_general"].notna() &
-            df["duracion_estimada"].notna()
-        ].copy()
+        df_m1 = df[df["modalidad_general"].notna() & df["duracion_estimada"].notna()].copy()
 
         fig_m1 = px.box(
             df_m1,
@@ -130,14 +130,11 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
         )
         st.plotly_chart(fig_m1, use_container_width=True)
 
-    # Box Plot 2 (completion_delay_years)
+    # Box Plot 2: Completion Delay
     if not needed_cols_m2.issubset(df.columns):
         st.warning(f"Faltan columnas para Modalidad (Completion Delay): {needed_cols_m2 - set(df.columns)}")
     else:
-        df_m2 = df[
-            df["modalidad_general"].notna() &
-            df["completion_delay_years"].notna()
-        ].copy()
+        df_m2 = df[df["modalidad_general"].notna() & df["completion_delay_years"].notna()].copy()
 
         fig_m2 = px.box(
             df_m2,
@@ -169,13 +166,11 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
     needed_cols_s1 = {"Sector_1", "duracion_estimada"}
     needed_cols_s2 = {"Sector_1", "completion_delay_years"}
 
-    # Box Plot 1: duracion_estimada
+    # Box Plot 1: Duración Estimada
     if not needed_cols_s1.issubset(df.columns):
         st.warning(f"Faltan columnas para Sector (duracion_estimada): {needed_cols_s1 - set(df.columns)}")
     else:
-        df_s1 = df[
-            df["Sector_1"].notna() & df["duracion_estimada"].notna()
-        ].copy()
+        df_s1 = df[df["Sector_1"].notna() & df["duracion_estimada"].notna()].copy()
 
         fig_s1 = px.box(
             df_s1,
@@ -197,13 +192,11 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
         )
         st.plotly_chart(fig_s1, use_container_width=True)
 
-    # Box Plot 2: completion_delay_years
+    # Box Plot 2: Completion Delay
     if not needed_cols_s2.issubset(df.columns):
         st.warning(f"Faltan columnas para Sector (completion_delay_years): {needed_cols_s2 - set(df.columns)}")
     else:
-        df_s2 = df[
-            df["Sector_1"].notna() & df["completion_delay_years"].notna()
-        ].copy()
+        df_s2 = df[df["Sector_1"].notna() & df["completion_delay_years"].notna()].copy()
 
         fig_s2 = px.box(
             df_s2,
@@ -228,32 +221,27 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
 
 def boxplot_montos(df: pd.DataFrame, titulo_extra: str = ""):
     """
-    Nueva pestaña "Montos": 
-      - Box Plot 1 (Top 6 Sector_1 en base a value_usd): 
-          X='Sector_1', Y='value_usd_millions'
-      - Box Plot 2 (todas las modalidades): 
-          X='modalidad_general', Y='value_usd_millions'
+    Pestaña "Montos":
+      - Box Plot 1 (Top 6 Sectores_1 en base a 'value_usd' filtrado) -> Y='value_usd_millions'
+      - Box Plot 2 (todas las modalidades) -> Y='value_usd_millions'
     """
     st.subheader(f"Box Plots de Montos {titulo_extra}")
 
-    # Primero creamos una columna con 'value_usd_millions' si no existe
+    # Aseguramos 'value_usd_millions'
     if "value_usd" in df.columns:
         df["value_usd_millions"] = df["value_usd"] / 1_000_000
     else:
         st.warning("No existe la columna 'value_usd' en el dataset.")
         return
 
-    # ============= BOX PLOT 1: TOP 6 SECTOR_1 por 'value_usd_millions' =============
+    # ============= BOX PLOT 1: TOP 6 SECTOR_1 (filtrado) =============
     needed_cols_s = {"Sector_1", "value_usd_millions"}
     if not needed_cols_s.issubset(df.columns):
-        st.warning(f"Faltan columnas para Montos (Sector_1, value_usd_millions).")
+        st.warning("Faltan columnas para Montos (Sector_1, value_usd_millions).")
     else:
-        df_s = df[
-            df["Sector_1"].notna() &
-            df["value_usd_millions"].notna()
-        ].copy()
+        df_s = df[df["Sector_1"].notna() & df["value_usd_millions"].notna()].copy()
 
-        # Determinar Top 6
+        # Determinar top 6 en base a la suma de 'value_usd_millions'
         df_agrupado = (
             df_s.groupby("Sector_1", as_index=False)["value_usd_millions"]
             .sum()
@@ -261,7 +249,7 @@ def boxplot_montos(df: pd.DataFrame, titulo_extra: str = ""):
         )
         top_sectores = df_agrupado["Sector_1"].head(6).tolist()
 
-        # Filtrar a top 6
+        # Filtramos a top 6
         df_top6 = df_s[df_s["Sector_1"].isin(top_sectores)]
 
         fig_m1 = px.box(
@@ -284,15 +272,12 @@ def boxplot_montos(df: pd.DataFrame, titulo_extra: str = ""):
         )
         st.plotly_chart(fig_m1, use_container_width=True)
 
-    # ============= BOX PLOT 2: MODALIDAD_GENERAL vs 'value_usd_millions' =============
+    # ============= BOX PLOT 2: MODALIDAD vs 'value_usd_millions' =============
     needed_cols_m = {"modalidad_general", "value_usd_millions"}
     if not needed_cols_m.issubset(df.columns):
         st.warning("Faltan columnas para Montos (modalidad_general, value_usd_millions).")
     else:
-        df_m = df[
-            df["modalidad_general"].notna() &
-            df["value_usd_millions"].notna()
-        ].copy()
+        df_m = df[df["modalidad_general"].notna() & df["value_usd_millions"].notna()].copy()
 
         fig_m2 = px.box(
             df_m,
@@ -318,35 +303,37 @@ def boxplot_montos(df: pd.DataFrame, titulo_extra: str = ""):
 # SUBPÁGINAS DE DESCRIPTIVO
 # -----------------------------------------------------------------------------
 def subpagina_ejecucion():
-    """Subpágina 'Ejecución' con scatter plots y box plots."""
+    """
+    Subpágina 'Ejecución' con:
+      - Filtros (Sector_1, activityscope_codename, value_usd_millions)
+      - Scatter plots
+      - Box plots (Modalidad, Sector, Montos)
+    Todos usando el mismo DF filtrado, por lo que el filtro de value_usd SÍ afecta
+    a los box plots.
+    """
     st.markdown('<p class="subtitle">Subpágina: Ejecución</p>', unsafe_allow_html=True)
 
-    st.write("Aquí se muestran **scatter plots** con filtros y los **box plots** (Modalidad, Sector, Montos).")
-
-    # =========================================================================
-    # 1) SCATTER PLOTS (con filtros)
-    # =========================================================================
+    # Cargamos el DF base para FILTROS
     df_filters = DATASETS["ACTIVITY_IADB"].copy()
-
     st.sidebar.subheader("Filtros (Ejecución)")
 
-    # Filtro Sector_1
+    # --- Filtro Sector_1 ---
     if "Sector_1" in df_filters.columns:
-        list_sectores = sorted(df_filters["Sector_1"].dropna().unique().tolist())
-        opciones_sector = ["General"] + list_sectores
+        lista_sectores = sorted(df_filters["Sector_1"].dropna().unique().tolist())
+        opciones_sector = ["General"] + lista_sectores
         sel_sector = st.sidebar.selectbox("Sector_1:", opciones_sector, index=0)
         if sel_sector != "General":
             df_filters = df_filters[df_filters["Sector_1"] == sel_sector]
 
-    # Filtro activityscope_codename
+    # --- Filtro activityscope_codename ---
     if "activityscope_codename" in df_filters.columns:
-        list_scopes = sorted(df_filters["activityscope_codename"].dropna().unique().tolist())
-        opciones_scope = ["General"] + list_scopes
+        lista_scopes = sorted(df_filters["activityscope_codename"].dropna().unique().tolist())
+        opciones_scope = ["General"] + lista_scopes
         sel_scope = st.sidebar.selectbox("activityscope_codename:", opciones_scope, index=0)
         if sel_scope != "General":
             df_filters = df_filters[df_filters["activityscope_codename"] == sel_scope]
 
-    # Filtro value_usd -> slider en millones
+    # --- Filtro value_usd -> slider en millones ---
     if "value_usd" in df_filters.columns:
         df_filters["value_usd_millions"] = df_filters["value_usd"] / 1_000_000
         min_val = float(df_filters["value_usd_millions"].min())
@@ -357,7 +344,7 @@ def subpagina_ejecucion():
             min_val,
             max_val,
             (min_val, max_val),
-            step=(max_val - min_val)/100 if (max_val - min_val) > 0 else 1
+            step=(max_val - min_val) / 100 if (max_val - min_val) > 0 else 1
         )
         df_filters = df_filters[
             (df_filters["value_usd_millions"] >= rango_slider[0]) &
@@ -366,13 +353,13 @@ def subpagina_ejecucion():
     else:
         df_filters["value_usd_millions"] = None
 
-    # SCATTER PLOTS
+    # ------------------------ SCATTER PLOTS ------------------------
     colA, colB = st.columns(2)
 
     with colA:
         st.subheader("Aprobaciones Vs Ejecución")
-        need_cols_1 = {"duracion_estimada", "completion_delay_years", "value_usd_millions"}
-        if need_cols_1.issubset(df_filters.columns):
+        needed_cols_1 = {"duracion_estimada", "completion_delay_years", "value_usd_millions"}
+        if needed_cols_1.issubset(df_filters.columns):
             df_scat1 = df_filters[
                 df_filters["duracion_estimada"].notna() &
                 df_filters["completion_delay_years"].notna() &
@@ -400,12 +387,12 @@ def subpagina_ejecucion():
             )
             st.plotly_chart(fig1, use_container_width=True)
         else:
-            st.warning(f"No existen todas las columnas {need_cols_1} para el primer scatter plot.")
+            st.warning(f"No existen todas las columnas {needed_cols_1} para el primer scatter plot.")
 
     with colB:
         st.subheader("Planificación Vs Ejecución")
-        need_cols_2 = {"duracion_estimada", "duracion_real"}
-        if need_cols_2.issubset(df_filters.columns):
+        needed_cols_2 = {"duracion_estimada", "duracion_real"}
+        if needed_cols_2.issubset(df_filters.columns):
             df_scat2 = df_filters[
                 df_filters["duracion_estimada"].notna() &
                 df_filters["duracion_real"].notna()
@@ -440,44 +427,42 @@ def subpagina_ejecucion():
             )
             st.plotly_chart(fig2, use_container_width=True)
         else:
-            st.warning(f"No existen todas las columnas {need_cols_2} para el segundo scatter plot.")
+            st.warning(f"No existen todas las columnas {needed_cols_2} para el segundo scatter plot.")
 
-    # =========================================================================
-    # BOX PLOTS (Global, sin filtros)
-    # =========================================================================
+    # ------------------------ BOX PLOTS (Filtrados) ------------------------
     st.markdown("---")
-    st.markdown("### Box Plots (Modalidad, Sector, Montos) - Global")
+    st.markdown("### Box Plots (Modalidad, Sector, Montos) - Filtrados")
 
-    df_box = DATASETS["ACTIVITY_IADB"].copy()
+    # Nota: Ahora los box plots usan EL MISMO DF FILTRADO (df_filters) para que
+    #       el filtro de value_usd también afecte a los box plots.
+    df_box = df_filters.copy()
 
     tab_mod, tab_sec, tab_montos = st.tabs(["Modalidad", "Sector", "Montos"])
 
     with tab_mod:
-        st.subheader("Box Plots - Modalidad (Global)")
-        boxplot_modalidad(df_box, titulo_extra="(Global)")
+        st.subheader("Box Plots - Modalidad (Filtrado)")
+        boxplot_modalidad(df_box, titulo_extra="(Filtrado)")
 
     with tab_sec:
-        st.subheader("Box Plots - Sector (Global)")
-        boxplot_sector(df_box, titulo_extra="(Global)")
+        st.subheader("Box Plots - Sector (Filtrado)")
+        boxplot_sector(df_box, titulo_extra="(Filtrado)")
 
     with tab_montos:
-        st.subheader("Box Plots - Montos (Global)")
-        boxplot_montos(df_box, titulo_extra="(Global)")
-
+        st.subheader("Box Plots - Montos (Filtrado)")
+        boxplot_montos(df_box, titulo_extra="(Filtrado)")
 
 def subpagina_flujos_agregados():
-    """Subpágina 'Flujos Agregados'."""
+    """Subpágina 'Flujos Agregados' (placeholder)."""
     st.markdown('<p class="subtitle">Subpágina: Flujos Agregados</p>', unsafe_allow_html=True)
     st.write("Aquí podrías mostrar métricas o gráficos de flujos totales, aprobaciones vs desembolsos, etc.")
     st.info("Placeholder: Implementa la lógica que desees para Flujos Agregados.")
 
 # -----------------------------------------------------------------------------
-# PÁGINA PRINCIPAL: DESCRIPTIVO
+# PÁGINA "Descriptivo" (DOS SUBPÁGINAS)
 # -----------------------------------------------------------------------------
 def descriptivo():
     st.markdown('<h1 class="title">Descriptivo</h1>', unsafe_allow_html=True)
 
-    # En la barra lateral agregamos la selección de subpáginas
     st.sidebar.title("Subpáginas de Descriptivo")
     subpaginas = ["Ejecución", "Flujos Agregados"]
     eleccion_sub = st.sidebar.radio("Elige una subpágina:", subpaginas, index=0)
