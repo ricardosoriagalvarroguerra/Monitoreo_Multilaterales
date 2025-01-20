@@ -161,7 +161,6 @@ def compute_yoy(df: pd.DataFrame, date_col: str, value_col: str, freq_code: str,
 
     return df_agg
 
-
 # -----------------------------------------------------------------------------
 # SUBPAGINA EJECUCION (ACTIVITY_IADB)
 # -----------------------------------------------------------------------------
@@ -426,11 +425,11 @@ def subpagina_flujos_agregados():
     freq_choice = st.selectbox("", freq_opts, index=2, label_visibility="collapsed")
 
     if freq_choice == "Trimestral":
-        freq_code = "Q"   # '3M' o 'Q'
+        freq_code = "Q"
         label_x = "Trimestre"
         shift_periods = 4
     elif freq_choice == "Semestral":
-        freq_code = "2Q"  # '6M' o '2Q'
+        freq_code = "2Q"
         label_x = "Semestre"
         shift_periods = 2
     else:
@@ -629,14 +628,11 @@ def subpagina_flujos_agregados():
     st.info("Flujos agregados: Aprobaciones (Outgoing Commitments).")
 
     # ----------------------------------------------------------------------------------
-    # NUEVA SECCIÓN: DOS GRÁFICOS DE TASA DE CRECIMIENTO INTERANUAL (EN BARRAS AGRUPADAS)
+    # NUEVA SECCIÓN: GRAFICO DE TASA DE CRECIMIENTO INTERANUAL (LINEA) - SOLO UNO
     # ----------------------------------------------------------------------------------
     st.markdown("---")
     st.markdown("## Tasa de Crecimiento Interanual (YoY)")
 
-    # -----------------------------
-    # 1) Gráfico principal (Global/Región/País)
-    # -----------------------------
     df_global_all = df_original.copy()
     df_global_all["transactiondate_isodate"] = pd.to_datetime(df_global_all["transactiondate_isodate"])
     df_global_all = df_global_all[
@@ -683,7 +679,7 @@ def subpagina_flujos_agregados():
         yoy_r_all["Categoria"] = f"Región: {sel_region}"
         yoy_list_all.append(yoy_r_all)
 
-    # iii) Países
+    # iii) País(es)
     for (country_name, df_country_all) in list_countries_data_all:
         yoy_c_all = compute_yoy(
             df_country_all,
@@ -695,154 +691,44 @@ def subpagina_flujos_agregados():
         yoy_c_all["Categoria"] = f"País: {country_name}"
         yoy_list_all.append(yoy_c_all)
 
-    colYoY1, colYoY2 = st.columns(2)
-
-    with colYoY1:
-        st.markdown("**(Izquierda) Crecimiento Interanual - General**")
-        if yoy_list_all:
-            df_yoy_final_all = pd.concat(yoy_list_all, ignore_index=True)
-            # Creamos un grouped bar chart
-            fig_yoy_all = px.bar(
-                df_yoy_final_all,
-                x="Periodo",
-                y="yoy",
-                color="Categoria",
-                barmode="group",
-                title="",  # Sin título interno
-                labels={
-                    "Periodo": "Periodo",
-                    "yoy": "Crec. Interanual (%)",
-                    "Categoria": ""
-                }
+    if yoy_list_all:
+        df_yoy_final_all = pd.concat(yoy_list_all, ignore_index=True)
+        # Gráfico de línea (conforma la solicitud)
+        fig_yoy_all = px.line(
+            df_yoy_final_all,
+            x="Periodo",
+            y="yoy",
+            color="Categoria",
+            markers=True,
+            line_shape="spline",  # Suavizado
+            title="",  # Sin título interno
+            labels={
+                "Periodo": "Periodo",
+                "yoy": "Crec. Interanual (%)",
+                "Categoria": ""
+            }
+        )
+        # Línea punteada en y=0 para distinguir negativo/positivo
+        fig_yoy_all.add_hline(
+            y=0,
+            line_dash="dot",
+            line_color="white"
+        )
+        fig_yoy_all.update_layout(
+            font_color="#FFFFFF",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="center",
+                x=0.5
             )
-            # Agregamos línea horizontal punteada en y=0
-            fig_yoy_all.add_hline(
-                y=0,
-                line_dash="dot",
-                line_color="white"
-            )
-            fig_yoy_all.update_layout(
-                font_color="#FFFFFF",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=1.02,
-                    xanchor="center",
-                    x=0.5
-                )
-            )
-            st.plotly_chart(fig_yoy_all, use_container_width=True)
-        else:
-            st.warning("No se pudo calcular Tasa de Crecimiento Interanual - vista general.")
-
-    # -----------------------------
-    # 2) Gráfico por modalidad_general
-    # -----------------------------
-    with colYoY2:
-        st.markdown("**(Derecha) Crecimiento Interanual - Por Modalidad**")
-
-        # - Filtramos df_global_all según modalidad
-        df_global_mod = df_global_all.copy()
-        if sel_mod != "Todas":
-            df_global_mod = df_global_mod[df_global_mod["modalidad_general"] == sel_mod]
-
-        # - Región
-        if sel_region != "Todas":
-            df_region_mod = df_global_mod[df_global_mod["region"] == sel_region].copy()
-        else:
-            df_region_mod = pd.DataFrame()
-
-        # - Países
-        list_countries_data_mod = []
-        if sel_region != "Todas" and ("Todas" not in sel_paises):
-            for c in sel_paises:
-                temp_df = df_region_mod[df_region_mod["recipientcountry_codename"] == c]
-                if not temp_df.empty:
-                    list_countries_data_mod.append((c, temp_df))
-
-        yoy_list_mod = []
-
-        # i) Global (para la modalidad)
-        if not df_global_mod.empty:
-            yoy_g_mod = compute_yoy(
-                df_global_mod,
-                date_col="transactiondate_isodate",
-                value_col="value_usd",
-                freq_code=freq_code,
-                shift_periods=shift_periods
-            )
-            if sel_mod == "Todas":
-                yoy_g_mod["Categoria"] = "Global (Todas Modalidades)"
-            else:
-                yoy_g_mod["Categoria"] = f"Global (Mod: {sel_mod})"
-            yoy_list_mod.append(yoy_g_mod)
-
-        # ii) Región (para la modalidad)
-        if not df_region_mod.empty:
-            if sel_mod == "Todas":
-                cat_name = f"Región {sel_region} (Todas)"
-            else:
-                cat_name = f"Región {sel_region} (Mod: {sel_mod})"
-            yoy_r_mod = compute_yoy(
-                df_region_mod,
-                date_col="transactiondate_isodate",
-                value_col="value_usd",
-                freq_code=freq_code,
-                shift_periods=shift_periods
-            )
-            yoy_r_mod["Categoria"] = cat_name
-            yoy_list_mod.append(yoy_r_mod)
-
-        # iii) País(es)
-        for (country_name, df_country_mod) in list_countries_data_mod:
-            yoy_c_mod = compute_yoy(
-                df_country_mod,
-                date_col="transactiondate_isodate",
-                value_col="value_usd",
-                freq_code=freq_code,
-                shift_periods=shift_periods
-            )
-            yoy_c_mod["Categoria"] = f"{country_name} (Mod: {sel_mod})"
-            yoy_list_mod.append(yoy_c_mod)
-
-        if yoy_list_mod:
-            df_yoy_final_mod = pd.concat(yoy_list_mod, ignore_index=True)
-            fig_yoy_mod = px.bar(
-                df_yoy_final_mod,
-                x="Periodo",
-                y="yoy",
-                color="Categoria",
-                barmode="group",
-                title="",  # Sin título interno
-                labels={
-                    "Periodo": "Periodo",
-                    "yoy": "Crec. Interanual (%)",
-                    "Categoria": ""
-                }
-            )
-            # Agregamos línea horizontal punteada en y=0
-            fig_yoy_mod.add_hline(
-                y=0,
-                line_dash="dot",
-                line_color="white"
-            )
-            fig_yoy_mod.update_layout(
-                font_color="#FFFFFF",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=1.02,
-                    xanchor="center",
-                    x=0.5
-                )
-            )
-            st.plotly_chart(fig_yoy_mod, use_container_width=True)
-        else:
-            st.warning("No se pudo calcular Tasa de Crecimiento Interanual por modalidad.")
+        )
+        st.plotly_chart(fig_yoy_all, use_container_width=True)
+    else:
+        st.warning("No se pudo calcular Tasa de Crecimiento Interanual con los filtros actuales.")
 
 # -----------------------------------------------------------------------------
 # PAGINA DESCRIPTIVO (DOS SUBPAGINAS)
