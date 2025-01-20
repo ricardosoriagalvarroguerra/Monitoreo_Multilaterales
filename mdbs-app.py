@@ -441,7 +441,7 @@ def subpagina_flujos_agregados():
         st.warning("No hay datos tras los filtros en Flujos Agregados.")
         return
 
-    # Paleta de colores a usar (fija)
+    # Paleta de colores
     color_palette = [
         "#4361ee",
         "#E86D67",
@@ -555,21 +555,17 @@ def subpagina_flujos_agregados():
         unique_sectors = sorted_top7 + ["OTROS"]
 
         # 6) Mapeamos cada sector a un color fijo en 'color_palette'
-        # (si hay más sectores que colores, se repite cíclicamente)
         color_map = {}
         for i, sector_n in enumerate(unique_sectors):
             color_map[sector_n] = color_palette[i % len(color_palette)]
 
         # ----------------------------------------------------------------------------
-        # UNA SOLA FIGURA con SUBPLOTS:
-        #  - Fila 1: stacked bar con valores absolutos
-        #  - Fila 2: stacked bar con porcentajes
-        #  Con legendgroup para ocultar/mostrar en ambos subplots.
+        # UNA SOLA FIGURA con SUBPLOTS (arriba-abajo), con +espacio vertical
         # ----------------------------------------------------------------------------
         fig_subplots = make_subplots(
             rows=2, cols=1,
             shared_xaxes=True,
-            vertical_spacing=0.08,
+            vertical_spacing=0.15,  # <--- Espacio vertical aumentado
             subplot_titles=(
                 "Evolución de aprobaciones (Millones USD)",
                 "Evolución de aprobaciones (%)"
@@ -578,9 +574,8 @@ def subpagina_flujos_agregados():
 
         # Preparamos la lista de periodos en orden
         # (opcional, ya que iremos pescando en cada sector)
-        # periodos_en_orden = sorted(df_agg_sec["Periodo"].unique())
 
-        # 6a) BARRAS (abs) en row=1
+        # BARRAS (abs) en row=1
         for sector_n in unique_sectors:
             df_temp_abs = df_agg_sec[df_agg_sec["Sector_stack"] == sector_n]
             x_vals = df_temp_abs["Periodo"]
@@ -592,26 +587,25 @@ def subpagina_flujos_agregados():
                     y=y_vals,
                     name=sector_n,
                     legendgroup=sector_n,
-                    marker_color=color_map[sector_n],  # color fijo
-                    showlegend=True  # mostramos la leyenda en la subgráfica de arriba
+                    marker_color=color_map[sector_n],
+                    showlegend=True
                 ),
                 row=1, col=1
             )
 
-        # 6b) BARRAS (% ) en row=2
+        # BARRAS (% ) en row=2
         for sector_n in unique_sectors:
             df_temp_pct = df_pct[df_pct["Sector_stack"] == sector_n]
             x_vals = df_temp_pct["Periodo"]
             y_vals = df_temp_pct["pct_value"]
 
-            # showlegend=False para no duplicar la leyenda en la subgráfica de abajo
             fig_subplots.add_trace(
                 go.Bar(
                     x=x_vals,
                     y=y_vals,
                     name=sector_n,
                     legendgroup=sector_n,
-                    marker_color=color_map[sector_n],  # color fijo
+                    marker_color=color_map[sector_n],
                     showlegend=False
                 ),
                 row=2, col=1
@@ -625,7 +619,8 @@ def subpagina_flujos_agregados():
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
-                y=1.02,
+                # y=1.02 -> incrementamos un poco
+                y=1.08,  # <-- Subimos la leyenda más lejos del título
                 xanchor="center",
                 x=0.5
             )
