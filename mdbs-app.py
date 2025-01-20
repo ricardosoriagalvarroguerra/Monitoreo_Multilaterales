@@ -145,10 +145,10 @@ def compute_yoy(df: pd.DataFrame, date_col: str, value_col: str, freq_code: str,
     df_agg = df_resampled[value_col].resample(freq_code).sum().reset_index()
     df_agg = df_agg.sort_values(date_col)
 
-    # Calculamos el cambio porcentual (en %) vs. 'shift_periods' atrás
+    # Cambio porcentual vs. 'shift_periods' atrás
     df_agg["yoy"] = df_agg[value_col].pct_change(periods=shift_periods) * 100
 
-    # Formateamos la columna Periodo (etiqueta X)
+    # Formateamos "Periodo"
     if freq_code.upper() == "A":  # Anual
         df_agg["Periodo"] = df_agg[date_col].dt.year.astype(str)
     elif freq_code.upper() in ["Q", "3M"]:  # Trimestral
@@ -186,7 +186,7 @@ def subpagina_ejecucion():
         if sel_region != "Todas":
             df_ejec = df_ejec[df_ejec["region"] == sel_region]
 
-    # --- Filtro País (multiselect con 'Todas') ---
+    # --- Filtro País ---
     if "recipientcountry_codename" in df_ejec.columns:
         pais_list = sorted(df_ejec["recipientcountry_codename"].dropna().unique().tolist())
         opt_paises = ["Todas"] + pais_list
@@ -220,7 +220,7 @@ def subpagina_ejecucion():
 
     colA, colB = st.columns(2)
 
-    # Scatter 1: "Aprobaciones Vs Ejecucion" (size en value_usd)
+    # Scatter 1: "Aprobaciones Vs Ejecucion"
     with colA:
         st.subheader("Aprobaciones Vs Ejecucion")
         needed_1 = {"duracion_estimada", "completion_delay_years", "value_usd"}
@@ -231,7 +231,7 @@ def subpagina_ejecucion():
                 df_ejec["value_usd"].notna()
             ]
             if df_scat1.empty:
-                st.warning("No hay datos en 'Aprobaciones Vs Ejecucion' tras filtrar.")
+                st.warning("No hay datos en 'Aprobaciones Vs Ejecucion'.")
             else:
                 fig1 = px.scatter(
                     df_scat1,
@@ -247,7 +247,7 @@ def subpagina_ejecucion():
                     }
                 )
                 fig1.update_layout(
-                    title="",  # Sin título interno
+                    title="",
                     font_color="#FFFFFF",
                     paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(0,0,0,0)"
@@ -256,7 +256,7 @@ def subpagina_ejecucion():
         else:
             st.warning(f"Faltan columnas en DataFrame: {needed_1 - set(df_ejec.columns)}")
 
-    # Scatter 2: "Planificacion Vs Ejecucion" (diagonal 45°)
+    # Scatter 2: "Planificacion Vs Ejecucion"
     with colB:
         st.subheader("Planificacion Vs Ejecucion")
         needed_2 = {"duracion_estimada", "duracion_real"}
@@ -266,7 +266,7 @@ def subpagina_ejecucion():
                 df_ejec["duracion_real"].notna()
             ]
             if df_scat2.empty:
-                st.warning("No hay datos en 'Planificacion Vs Ejecucion' tras filtrar.")
+                st.warning("No hay datos en 'Planificacion Vs Ejecucion'.")
             else:
                 fig2 = px.scatter(
                     df_scat2,
@@ -278,7 +278,7 @@ def subpagina_ejecucion():
                         "duracion_real": "Duracion Real (años)"
                     }
                 )
-                # Agregamos línea diagonal (45°)
+                # Línea diagonal 45°
                 max_val = max(df_scat2["duracion_estimada"].max(), df_scat2["duracion_real"].max())
                 fig2.add_shape(
                     type="line",
@@ -286,7 +286,7 @@ def subpagina_ejecucion():
                     line=dict(color="white", dash="dot")
                 )
                 fig2.update_layout(
-                    title="",  # Sin título interno
+                    title="",
                     font_color="#FFFFFF",
                     paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(0,0,0,0)"
@@ -441,6 +441,18 @@ def subpagina_flujos_agregados():
         st.warning("No hay datos tras los filtros en Flujos Agregados.")
         return
 
+    # Paleta de colores a usar (fija)
+    color_palette = [
+        "#4361ee",
+        "#E86D67",
+        "#FFFFFF",
+        "#59C3C3",
+        "#FBD48A",
+        "#B4B3B6",
+        "#22223B",
+        "#8A84C6"
+    ]
+
     # -----------------------------
     # GRAFICOS
     # -----------------------------
@@ -532,43 +544,45 @@ def subpagina_flujos_agregados():
             return
 
         # 4) Preparamos dataset para la parte porcentual
-        # Hacemos pivot: filas = "Periodo", columnas = "Sector_stack", valores = "value_usd_millions"
         pivoted = df_agg_sec.pivot(index="Periodo", columns="Sector_stack", values="value_usd_millions").fillna(0)
         sums = pivoted.sum(axis=1)
         pivot_pct = pivoted.div(sums, axis=0) * 100
-        # Volvemos a "melt" para graficar con plotly
+        # Volvemos a "melt"
         df_pct = pivot_pct.reset_index().melt(id_vars="Periodo", var_name="Sector_stack", value_name="pct_value")
 
-        # 5) Lista ordenada de sectores (top7 + OTROS)
+        # 5) Lista ordenada de sectores
         sorted_top7 = sorted(top_7)
         unique_sectors = sorted_top7 + ["OTROS"]
 
+        # 6) Mapeamos cada sector a un color fijo en 'color_palette'
+        # (si hay más sectores que colores, se repite cíclicamente)
+        color_map = {}
+        for i, sector_n in enumerate(unique_sectors):
+            color_map[sector_n] = color_palette[i % len(color_palette)]
+
         # ----------------------------------------------------------------------------
-        # AHORA creamos UNA SOLA FIGURA con SUBPLOTS:
+        # UNA SOLA FIGURA con SUBPLOTS:
         #  - Fila 1: stacked bar con valores absolutos
         #  - Fila 2: stacked bar con porcentajes
-        #  Con legendgroup = sector para ocultar/mostrar en ambos subplots.
+        #  Con legendgroup para ocultar/mostrar en ambos subplots.
         # ----------------------------------------------------------------------------
         fig_subplots = make_subplots(
             rows=2, cols=1,
             shared_xaxes=True,
-            vertical_spacing=0.08,  # Espacio entre subgráficas
+            vertical_spacing=0.08,
             subplot_titles=(
-                "Evolución de aprobaciones (Millones USD)", 
+                "Evolución de aprobaciones (Millones USD)",
                 "Evolución de aprobaciones (%)"
             )
         )
 
-        # Convertimos df_agg_sec en un df pivotado? 
-        # Realmente para stacked con subplots, podemos añadir un trace por cada sector en cada subplot.
-
         # Preparamos la lista de periodos en orden
-        periodos_en_orden = sorted(df_agg_sec["Periodo"].unique())
+        # (opcional, ya que iremos pescando en cada sector)
+        # periodos_en_orden = sorted(df_agg_sec["Periodo"].unique())
 
-        # 5a) BARRAS (abs) en row=1
+        # 6a) BARRAS (abs) en row=1
         for sector_n in unique_sectors:
             df_temp_abs = df_agg_sec[df_agg_sec["Sector_stack"] == sector_n]
-            # Mapeamos Periodo -> value_usd_millions
             x_vals = df_temp_abs["Periodo"]
             y_vals = df_temp_abs["value_usd_millions"]
 
@@ -577,32 +591,32 @@ def subpagina_flujos_agregados():
                     x=x_vals,
                     y=y_vals,
                     name=sector_n,
-                    legendgroup=sector_n,   # agrupa la leyenda
-                    showlegend=True,        # muestra la leyenda en la 1a subgráfica
+                    legendgroup=sector_n,
+                    marker_color=color_map[sector_n],  # color fijo
+                    showlegend=True  # mostramos la leyenda en la subgráfica de arriba
                 ),
                 row=1, col=1
             )
 
-        # 5b) BARRAS (% ) en row=2
+        # 6b) BARRAS (% ) en row=2
         for sector_n in unique_sectors:
             df_temp_pct = df_pct[df_pct["Sector_stack"] == sector_n]
             x_vals = df_temp_pct["Periodo"]
             y_vals = df_temp_pct["pct_value"]
 
-            # showlegend=False para no duplicar la leyenda en la 2da subgráfica,
-            # pero usar el mismo legendgroup, así se oculta en ambas al hacer clic.
+            # showlegend=False para no duplicar la leyenda en la subgráfica de abajo
             fig_subplots.add_trace(
                 go.Bar(
                     x=x_vals,
                     y=y_vals,
                     name=sector_n,
                     legendgroup=sector_n,
+                    marker_color=color_map[sector_n],  # color fijo
                     showlegend=False
                 ),
                 row=2, col=1
             )
 
-        # Ajustamos layout a barmode='stack'
         fig_subplots.update_layout(
             barmode="stack",
             font_color="#FFFFFF",
@@ -616,13 +630,9 @@ def subpagina_flujos_agregados():
                 x=0.5
             )
         )
-
-        # Títulos en cada subplot
         fig_subplots.update_xaxes(title_text=label_x, row=2, col=1)
         fig_subplots.update_yaxes(title_text="Millones USD", row=1, col=1)
         fig_subplots.update_yaxes(title_text="Porcentaje (%)", row=2, col=1)
-
-        # Ajustes de trazo
         fig_subplots.update_traces(marker_line_color="white", marker_line_width=1)
 
         st.plotly_chart(fig_subplots, use_container_width=True)
@@ -701,8 +711,8 @@ def subpagina_flujos_agregados():
             y="yoy",
             color="Categoria",
             markers=True,
-            line_shape="spline",  # suavisado
-            title="",  # sin título interno
+            line_shape="spline",
+            title="",
             labels={
                 "Periodo": "Periodo",
                 "yoy": "Crec. Interanual (%)",
