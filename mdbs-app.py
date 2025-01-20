@@ -7,6 +7,7 @@ import folium
 from streamlit_folium import st_folium
 from folium.plugins import MarkerCluster
 import random
+from datetime import datetime
 
 # -----------------------------------------------------------------------------
 # CONFIGURACIÓN DE PÁGINA Y CSS PERSONALIZADO (MODO OSCURO)
@@ -381,61 +382,54 @@ def subpagina_ejecucion():
 
 
 # -----------------------------------------------------------------------------
-# SUBPÁGINA: FLUJOS AGREGADOS (CON CORRECCIÓN DE SLIDER DE FECHAS)
+# SUBPÁGINA: FLUJOS AGREGADOS (FILTRO DE AÑOS + SOLO APROBACIONES)
 # -----------------------------------------------------------------------------
 def subpagina_flujos_agregados():
     """
     Subpágina: Flujos Agregados
-      - Slider de fecha en la barra lateral (conversión a tipo date nativo para evitar KeyError)
+      - Filtro de años en la barra lateral
+      - Filtro por Sector_1 (opcional)
       - Selección de frecuencia (Trimestral, Semestral, Anual) por defecto Anual
-      - Dos gráficos de barras (Aprobaciones vs. Desembolsos) en millones, color #d90429
+      - Un gráfico de barras (Aprobaciones) en millones, color #d90429
+      - El eje X cambia sus etiquetas (Año, Semestre, Trimestre) según la frecuencia
     """
     st.markdown('<p class="subtitle">Subpágina: Flujos Agregados</p>', unsafe_allow_html=True)
 
-    # 1) Cargamos DataFrames
+    # 1) Cargamos DataFrame de "Aprobaciones" (OUTGOING)
     df_outgoing = DATASETS["OUTGOING_COMMITMENT_IADB"].copy()
-    df_disb = DATASETS["DISBURSEMENTS_DATA"].copy()
+    df_outgoing["transactiondate_isodate"] = pd.to_datetime(df_outgoing["transactiondate_isodate"])
 
-    # Aseguramos formato datetime en transactiondate_isodate
-    if "transactiondate_isodate" in df_outgoing.columns:
-        df_outgoing["transactiondate_isodate"] = pd.to_datetime(df_outgoing["transactiondate_isodate"])
-    if "transactiondate_isodate" in df_disb.columns:
-        df_disb["transactiondate_isodate"] = pd.to_datetime(df_disb["transactiondate_isodate"])
+    st.sidebar.subheader("Filtros (Flujos Agregados)")
 
-    # 2) Hallamos min y max como pandas Timestamps
-    min_date_global = min(df_outgoing["transactiondate_isodate"].min(),
-                          df_disb["transactiondate_isodate"].min())
-    max_date_global = max(df_outgoing["transactiondate_isodate"].max(),
-                          df_disb["transactiondate_isodate"].max())
+    # Filtro de Sector_1 (opcional)
+    if "Sector_1" in df_outgoing.columns:
+        lista_sectores = sorted(df_outgoing["Sector_1"].dropna().unique().tolist())
+        opciones_sector = ["Todos"] + lista_sectores
+        sel_sector = st.sidebar.selectbox("Sector_1:", opciones_sector, index=0)
+        if sel_sector != "Todos":
+            df_outgoing = df_outgoing[df_outgoing["Sector_1"] == sel_sector]
 
-    # Convertimos a datetime.date para que Streamlit slider no genere error
-    min_date_slider = min_date_global.date()
-    max_date_slider = max_date_global.date()
+    # 2) Años mínimo y máximo
+    min_year = df_outgoing["transactiondate_isodate"].dt.year.min()
+    max_year = df_outgoing["transactiondate_isodate"].dt.year.max()
 
-    st.sidebar.subheader("Filtro de fechas (Flujos Agregados)")
-
-    # 3) Creamos el slider de rango de fechas
-    start_date, end_date = st.sidebar.slider(
-        "Rango de fechas:",
-        min_value=min_date_slider,
-        max_value=max_date_slider,
-        value=(min_date_slider, max_date_slider),
-        format="YYYY-MM-DD"
+    # 3) Slider de rango de años
+    start_year, end_year = st.sidebar.slider(
+        "Rango de años:",
+        min_value=int(min_year),
+        max_value=int(max_year),
+        value=(int(min_year), int(max_year)),
+        step=1
     )
 
-    # Convertir a Timestamps para filtrar el DataFrame
-    start_ts = pd.to_datetime(start_date)
-    end_ts = pd.to_datetime(end_date)
+    # Convertimos a Timestamp: del 1 enero start_year al 31 dic end_year
+    start_ts = pd.to_datetime(datetime(start_year, 1, 1))
+    end_ts = pd.to_datetime(datetime(end_year, 12, 31))
 
     # Filtramos
     df_outgoing_f = df_outgoing[
         (df_outgoing["transactiondate_isodate"] >= start_ts) &
         (df_outgoing["transactiondate_isodate"] <= end_ts)
-    ].copy()
-
-    df_disb_f = df_disb[
-        (df_disb["transactiondate_isodate"] >= start_ts) &
-        (df_disb["transactiondate_isodate"] <= end_ts)
     ].copy()
 
     # 4) Selección de Frecuencia (Trimestral, Semestral, Anual), por defecto = Anual
@@ -452,73 +446,65 @@ def subpagina_flujos_agregados():
         freq_code = "Q"   # Resample trimestral
     elif freq_choice == "Semestral":
         freq_code = "6M"  # Resample cada 6 meses
-    else:  # Anual
+    else:
         freq_code = "A"   # Resample anual
 
-    # 5) Agrupamos/Resample y pasamos a millones
+    # Resample
     df_outgoing_f.set_index("transactiondate_isodate", inplace=True)
     df_agg_outgoing = df_outgoing_f["value_usd"].resample(freq_code).sum().reset_index()
+
+    # 5) Creación de columna "Periodo" para el eje X
+    if freq_choice == "Trimestral":
+        # Etiquetas "2020T1", "2020T2", ...
+        df_agg_outgoing["Periodo"] = (
+            df_agg_outgoing["transactiondate_isodate"].dt.year.astype(str)
+            + "T"
+            + df_agg_outgoing["transactiondate_isodate"].dt.quarter.astype(str)
+        )
+        x_axis_label = "Trimestre"
+    elif freq_choice == "Semestral":
+        # Etiquetas "2020S1", "2020S2"
+        semester = (df_agg_outgoing["transactiondate_isodate"].dt.month.sub(1)//6).add(1)
+        df_agg_outgoing["Periodo"] = (
+            df_agg_outgoing["transactiondate_isodate"].dt.year.astype(str)
+            + "S"
+            + semester.astype(str)
+        )
+        x_axis_label = "Semestre"
+    else:
+        # Etiquetas anuales "2020", "2021", ...
+        df_agg_outgoing["Periodo"] = df_agg_outgoing["transactiondate_isodate"].dt.year.astype(str)
+        x_axis_label = "Año"
+
+    # Convertir a millones
     df_agg_outgoing["value_usd_millions"] = df_agg_outgoing["value_usd"] / 1_000_000
 
-    df_disb_f.set_index("transactiondate_isodate", inplace=True)
-    df_agg_disb = df_disb_f["value_usd"].resample(freq_code).sum().reset_index()
-    df_agg_disb["value_usd_millions"] = df_agg_disb["value_usd"] / 1_000_000
+    # 6) Gráfico de barras (Aprobaciones)
+    st.subheader("Aprobaciones")
+    if df_agg_outgoing.empty:
+        st.warning("No hay datos de Aprobaciones en el rango de años seleccionado.")
+    else:
+        fig_aprob = px.bar(
+            df_agg_outgoing,
+            x="Periodo",
+            y="value_usd_millions",
+            color_discrete_sequence=["#d90429"],
+            labels={
+                "Periodo": x_axis_label,
+                "value_usd_millions": "Monto (Millones USD)"
+            },
+            title=""
+        )
+        fig_aprob.update_layout(
+            font_color="#FFFFFF",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(showgrid=False),
+            yaxis=dict(showgrid=False)
+        )
+        st.plotly_chart(fig_aprob, use_container_width=True)
 
-    # 6) Dibujamos los gráficos de barras en dos columnas
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader("Aprobaciones")
-        if df_agg_outgoing.empty:
-            st.warning("No hay datos de Aprobaciones en el rango de fechas seleccionado.")
-        else:
-            fig_aprob = px.bar(
-                df_agg_outgoing,
-                x="transactiondate_isodate",
-                y="value_usd_millions",
-                color_discrete_sequence=["#d90429"],
-                labels={
-                    "transactiondate_isodate": "Fecha",
-                    "value_usd_millions": "Monto (Millones USD)"
-                },
-                title=""
-            )
-            fig_aprob.update_layout(
-                font_color="#FFFFFF",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                xaxis=dict(showgrid=False),
-                yaxis=dict(showgrid=False)
-            )
-            st.plotly_chart(fig_aprob, use_container_width=True)
-
-    with col2:
-        st.subheader("Desembolsos")
-        if df_agg_disb.empty:
-            st.warning("No hay datos de Desembolsos en el rango de fechas seleccionado.")
-        else:
-            fig_desb = px.bar(
-                df_agg_disb,
-                x="transactiondate_isodate",
-                y="value_usd_millions",
-                color_discrete_sequence=["#d90429"],
-                labels={
-                    "transactiondate_isodate": "Fecha",
-                    "value_usd_millions": "Monto (Millones USD)"
-                },
-                title=""
-            )
-            fig_desb.update_layout(
-                font_color="#FFFFFF",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                xaxis=dict(showgrid=False),
-                yaxis=dict(showgrid=False)
-            )
-            st.plotly_chart(fig_desb, use_container_width=True)
-
-    st.info("Gráficos de flujos agregados: Aprobaciones (Outgoing Commitments) vs Desembolsos.")
-
+    st.info("Gráfico de flujos agregados: Aprobaciones (Outgoing Commitments).")
 
 # -----------------------------------------------------------------------------
 # PÁGINA "Descriptivo" (DOS SUBPÁGINAS)
