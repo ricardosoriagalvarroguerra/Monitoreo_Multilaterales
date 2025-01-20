@@ -363,7 +363,7 @@ def subpagina_flujos_agregados():
         st.warning("No hay datos tras los filtros en Flujos Agregados.")
         return
 
-    # Paleta
+    # Paleta de colores
     color_palette = [
         "#4361ee",
         "#E86D67",
@@ -459,7 +459,7 @@ def subpagina_flujos_agregados():
         df_agg_sec = df_agg_sec.groupby(["Periodo", "Sector_stack"], as_index=False)["value_usd_millions"].sum()
 
         if df_agg_sec.empty:
-            st.warning("No hay datos despues de agrupar top 7 + 'OTROS'.")
+            st.warning("No hay datos después de agrupar top 7 + 'OTROS'.")
             return
 
         sorted_top7 = sorted(top_7)
@@ -487,7 +487,7 @@ def subpagina_flujos_agregados():
             font_color="#FFFFFF",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            showlegend=False  # <-- Ocultamos la leyenda en el stacked normal
+            showlegend=False  # Ocultamos la leyenda en el stacked normal
         )
 
         # Percentage stacked bar
@@ -516,7 +516,8 @@ def subpagina_flujos_agregados():
         fig_pct.update_layout(
             font_color="#FFFFFF",
             paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)"
+            plot_bgcolor="rgba(0,0,0,0)",
+            legend=dict(font=dict(size=9))  # <-- Hacemos la leyenda más pequeña
         )
 
         # Mostrar ambos gráficos en columnas, uno al lado del otro
