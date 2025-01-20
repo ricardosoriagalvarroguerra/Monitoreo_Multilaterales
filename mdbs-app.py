@@ -389,19 +389,16 @@ def subpagina_ejecucion():
 
 
 # -----------------------------------------------------------------------------
-# SUBPÁGINA: FLUJOS AGREGADOS (Stacked Bar con Top 7 + 'Otros' al escoger Sectores)
+# SUBPÁGINA: FLUJOS AGREGADOS
 # -----------------------------------------------------------------------------
 def subpagina_flujos_agregados():
     """
     Subpágina: Flujos Agregados
-      - Filtros:
-        * Región -> MULTIselect País
-        * Modalidad (modality_general)
-        * Rango de años
-        * Frecuencia (Trimestral, Semestral, Anual)
-      - Radio "Ver por": [Fechas | Sectores]
-        * Fechas -> barras por periodo
-        * Sectores -> Stacked bar top 7 + "Otros"
+      - Filtros: Región->País, Modalidad, Rango de años, Frecuencia (Trimestral, Semestral, Anual)
+      - "Ver por": [Fechas | Sectores]
+        -> Fechas: bar chart vs tiempo
+        -> Sectores: bar chart vs tiempo, apilado (stacked) por Sector
+           con top 7 + 'Otros'
     """
     st.markdown('<p class="subtitle">Subpágina: Flujos Agregados</p>', unsafe_allow_html=True)
 
@@ -410,7 +407,9 @@ def subpagina_flujos_agregados():
 
     st.sidebar.subheader("Filtros (Flujos Agregados)")
 
-    # Filtro de Región (columna "region")
+    # 1) Filtros (Región, País, Modalidad, Años)
+    # -------------------------------------------------------------------------
+    # A) Región
     if "region" in df.columns:
         regiones = sorted(df["region"].dropna().unique().tolist())
         regiones_op = ["Todas"] + regiones
@@ -418,14 +417,14 @@ def subpagina_flujos_agregados():
         if sel_region != "Todas":
             df = df[df["region"] == sel_region]
 
-    # Filtro de País MULTISELECT (recipientcountry_codename)
+    # B) País(es) (MULTISELECT)
     if "recipientcountry_codename" in df.columns:
         lista_paises = sorted(df["recipientcountry_codename"].dropna().unique().tolist())
-        sel_paises = st.sidebar.multiselect("País(es):", options=lista_paises, default=lista_paises)
+        sel_paises = st.sidebar.multiselect("País(es):", lista_paises, default=lista_paises)
         if sel_paises:
             df = df[df["recipientcountry_codename"].isin(sel_paises)]
 
-    # Filtro de Modalidad (modality_general)
+    # C) Modalidad
     if "modality_general" in df.columns:
         lista_mods = sorted(df["modality_general"].dropna().unique().tolist())
         opciones_mods = ["Todas"] + lista_mods
@@ -433,7 +432,7 @@ def subpagina_flujos_agregados():
         if sel_mod != "Todas":
             df = df[df["modality_general"] == sel_mod]
 
-    # Filtro de Años
+    # D) Años
     if df.empty:
         st.warning("No hay datos disponibles para configurar el rango de años (filtros de arriba).")
         return
@@ -457,7 +456,7 @@ def subpagina_flujos_agregados():
         (df["transactiondate_isodate"] <= end_ts)
     ].copy()
 
-    # Frecuencia
+    # 2) Frecuencia
     freq_opciones = ["Trimestral", "Semestral", "Anual"]
     st.markdown("**Frecuencia**")
     freq_choice = st.selectbox(
@@ -469,12 +468,15 @@ def subpagina_flujos_agregados():
 
     if freq_choice == "Trimestral":
         freq_code = "Q"
+        x_label = "Trimestre"
     elif freq_choice == "Semestral":
         freq_code = "6M"
+        x_label = "Semestre"
     else:
         freq_code = "A"
+        x_label = "Año"
 
-    # Opción "Ver por": Fechas o Sectores
+    # 3) "Ver por": Fechas | Sectores
     vista_opciones = ["Fechas", "Sectores"]
     vista = st.radio("Ver por:", vista_opciones, horizontal=True)
 
@@ -482,24 +484,26 @@ def subpagina_flujos_agregados():
         st.warning("No hay datos disponibles con los filtros seleccionados.")
         return
 
-    # Convertir 'value_usd' a millones
+    # Convertimos a millones
     df["value_usd_millions"] = df["value_usd"] / 1_000_000
 
     # -------------------------------------------------------------------------
-    # 1) Opción: FECHAS -> Barras por periodo
+    # (A) VER POR FECHAS: bar chart vs tiempo (sin stacking)
     # -------------------------------------------------------------------------
     if vista == "Fechas":
+        # 1. Hacemos resample simple por freq_code (sum total por período)
         df.set_index("transactiondate_isodate", inplace=True)
         df_agg = df["value_usd"].resample(freq_code).sum().reset_index()
         df_agg["value_usd_millions"] = df_agg["value_usd"] / 1_000_000
+        df.reset_index(inplace=True)
 
+        # 2. Creamos la columna "Periodo"
         if freq_choice == "Trimestral":
             df_agg["Periodo"] = (
                 df_agg["transactiondate_isodate"].dt.year.astype(str)
                 + "T"
                 + df_agg["transactiondate_isodate"].dt.quarter.astype(str)
             )
-            x_label = "Trimestre"
         elif freq_choice == "Semestral":
             semester = (df_agg["transactiondate_isodate"].dt.month.sub(1)//6).add(1)
             df_agg["Periodo"] = (
@@ -507,10 +511,8 @@ def subpagina_flujos_agregados():
                 + "S"
                 + semester.astype(str)
             )
-            x_label = "Semestre"
         else:
             df_agg["Periodo"] = df_agg["transactiondate_isodate"].dt.year.astype(str)
-            x_label = "Año"
 
         st.subheader("Aprobaciones (por Frecuencia)")
 
@@ -538,51 +540,70 @@ def subpagina_flujos_agregados():
             st.plotly_chart(fig_time, use_container_width=True)
 
     # -------------------------------------------------------------------------
-    # 2) Opción: SECTORES -> Stacked Bar Top 7 + "Otros"
+    # (B) VER POR SECTORES: bar chart vs tiempo APILADO (Top 7 + "Otros")
     # -------------------------------------------------------------------------
     else:
+        # 1. Verificamos que exista la columna "Sector"
         if "Sector" not in df.columns:
             st.warning("No existe la columna 'Sector' para agrupar por sector.")
             return
 
-        # a) Sumar por Sector
-        df_sec = (
-            df.groupby("Sector", as_index=False)["value_usd_millions"]
+        # 2. Para agrupar por tiempo *y* sector, creamos la columna "Periodo"
+        #    y luego hacemos groupby(["Periodo", "Sector"]).
+        df["Periodo"] = None
+        if freq_choice == "Trimestral":
+            df["Periodo"] = (
+                df["transactiondate_isodate"].dt.year.astype(str)
+                + "T"
+                + df["transactiondate_isodate"].dt.quarter.astype(str)
+            )
+        elif freq_choice == "Semestral":
+            semester = (df["transactiondate_isodate"].dt.month.sub(1)//6).add(1)
+            df["Periodo"] = (
+                df["transactiondate_isodate"].dt.year.astype(str)
+                + "S"
+                + semester.astype(str)
+            )
+        else:
+            df["Periodo"] = df["transactiondate_isodate"].dt.year.astype(str)
+
+        # 3. Sumamos 'value_usd_millions' por (Periodo, Sector)
+        df_agg_sec = df.groupby(["Periodo", "Sector"], as_index=False)["value_usd_millions"].sum()
+
+        # 4. Determinamos top 7 sectores (en todo el rango) por sum(value_usd_millions)
+        top_7_list = (
+            df_agg_sec.groupby("Sector", as_index=False)["value_usd_millions"]
             .sum()
             .sort_values("value_usd_millions", ascending=False)
+            .head(7)["Sector"]
+            .tolist()
         )
 
-        # b) Determinar top 7
-        top_7 = df_sec["Sector"].head(7).tolist()
+        # 5. Reemplazamos en df_agg_sec sectores no-top7 por "Otros"
+        df_agg_sec["Sector_stack"] = df_agg_sec["Sector"].apply(lambda s: s if s in top_7_list else "Otros")
 
-        # c) Reemplazamos sectores que no estén en el top 7 por "Otros"
-        df["Sector_Stack"] = df["Sector"].apply(lambda x: x if x in top_7 else "Otros")
+        # 6. Re-agrupamos para combinar todo lo "Otros"
+        df_agg_sec = df_agg_sec.groupby(["Periodo", "Sector_stack"], as_index=False)["value_usd_millions"].sum()
 
-        # d) Resumimos otra vez por 'Sector_Stack'
-        df_stacked = df.groupby("Sector_Stack", as_index=False)["value_usd_millions"].sum()
+        st.subheader("Aprobaciones Apiladas por Sector (Top 7 + Otros)")
 
-        # e) Para mostrar un stacked bar, necesitamos un eje X (dummy).  
-        #    Creamos un dummy_x con valor único (p.e. "Aprobaciones") para que sea una sola barra.
-        df_stacked["dummy_x"] = "Aprobaciones"
-
-        st.subheader("Aprobaciones por Sector (Top 7 + Otros)")
-
-        if df_stacked.empty:
+        if df_agg_sec.empty:
             st.warning("No hay datos de Aprobaciones en los filtros seleccionados.")
         else:
+            # 7. Hacemos un bar chart apilado: x = "Periodo", color = "Sector_stack"
             fig_stack = px.bar(
-                df_stacked,
-                x="dummy_x",
+                df_agg_sec,
+                x="Periodo",
                 y="value_usd_millions",
-                color="Sector_Stack",
-                color_discrete_sequence=px.colors.qualitative.Dark24,  # paleta variada
+                color="Sector_stack",
+                barmode="stack",
                 labels={
-                    "dummy_x": "",
-                    "Sector_Stack": "Sector",
+                    "Periodo": x_label,
+                    "Sector_stack": "Sector",
                     "value_usd_millions": "Monto (Millones USD)"
                 },
-                title="",
-                barmode="stack"
+                color_discrete_sequence=px.colors.qualitative.Dark24,
+                title=""
             )
             fig_stack.update_layout(
                 font_color="#FFFFFF",
@@ -594,6 +615,7 @@ def subpagina_flujos_agregados():
             st.plotly_chart(fig_stack, use_container_width=True)
 
     st.info("Flujos agregados: Aprobaciones (Outgoing Commitments).")
+
 
 # -----------------------------------------------------------------------------
 # PÁGINA "Descriptivo" (DOS SUBPÁGINAS)
