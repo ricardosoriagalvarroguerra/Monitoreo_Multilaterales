@@ -128,6 +128,39 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
             )
             st.plotly_chart(fig2, use_container_width=True)
 
+
+def compute_yoy(df: pd.DataFrame, date_col: str, value_col: str, freq_code: str, shift_periods: int):
+    """
+    Calcula el YoY (tasa de crecimiento interanual) con la frecuencia especificada.
+    Devuelve un DataFrame con columnas: [date_col, value_col, yoy, Periodo].
+    """
+    # Resample/agrupación según la frecuencia
+    # Ojo: en pandas, para re-sample necesitamos set_index con la columna de fecha
+    df_resampled = df.copy()
+    df_resampled.set_index(date_col, inplace=True)
+    df_agg = df_resampled[value_col].resample(freq_code).sum().reset_index()
+    df_agg = df_agg.sort_values(date_col)
+
+    # Calculamos el % de cambio vs. periodos atrás (por ej. 1 año = 1, 4 trimestres = 4, etc.)
+    df_agg["yoy"] = df_agg[value_col].pct_change(periods=shift_periods) * 100
+
+    # Formateamos la columna Periodo para mostrar en el eje X
+    if freq_code.upper() == "A":  # Anual
+        df_agg["Periodo"] = df_agg[date_col].dt.year.astype(str)
+    elif freq_code.upper() in ["Q", "3M"]:  # Trimestral
+        df_agg["Periodo"] = (
+            df_agg[date_col].dt.year.astype(str) + "T" + df_agg[date_col].dt.quarter.astype(str)
+        )
+    elif freq_code.upper() in ["6M", "2Q"]:  # Semestral
+        sm = (df_agg[date_col].dt.month.sub(1)//6).add(1)
+        df_agg["Periodo"] = df_agg[date_col].dt.year.astype(str) + "S" + sm.astype(str)
+    else:
+        # fallback
+        df_agg["Periodo"] = df_agg[date_col].dt.strftime("%Y-%m")
+
+    return df_agg
+
+
 # -----------------------------------------------------------------------------
 # SUBPAGINA EJECUCION (ACTIVITY_IADB)
 # -----------------------------------------------------------------------------
@@ -186,7 +219,7 @@ def subpagina_ejecucion():
 
     colA, colB = st.columns(2)
 
-    # Scatter 1: "Aprobaciones Vs Ejecución" (Burbujas con size en value_usd)
+    # Scatter 1: "Aprobaciones Vs Ejecucion" (Burbujas con size en value_usd)
     with colA:
         st.subheader("Aprobaciones Vs Ejecucion")
         needed_1 = {"duracion_estimada", "completion_delay_years", "value_usd"}
@@ -278,31 +311,47 @@ def subpagina_ejecucion():
 def subpagina_flujos_agregados():
     st.markdown('<p class="subtitle">Subpagina: Flujos Agregados</p>', unsafe_allow_html=True)
 
-    df = DATASETS["OUTGOING_COMMITMENT_IADB"].copy()
-    df["transactiondate_isodate"] = pd.to_datetime(df["transactiondate_isodate"])
+    df_original = DATASETS["OUTGOING_COMMITMENT_IADB"].copy()
+    df_original["transactiondate_isodate"] = pd.to_datetime(df_original["transactiondate_isodate"])
 
+    # -----------------------------
+    # Filtros en barra lateral
+    # -----------------------------
     st.sidebar.subheader("Filtros (Flujos Agregados)")
 
-    # Filtro region
-    if "region" in df.columns:
-        region_list = sorted(df["region"].dropna().unique().tolist())
+    # 1) Filtro region
+    if "region" in df_original.columns:
+        region_list = sorted(df_original["region"].dropna().unique().tolist())
         sel_region = st.sidebar.selectbox("Region:", ["Todas"] + region_list, 0)
-        if sel_region != "Todas":
-            df = df[df["region"] == sel_region]
+    else:
+        sel_region = "Todas"
 
-    # Filtro pais (multiselect con 'Todas')
-    if "recipientcountry_codename" in df.columns:
-        pais_list = sorted(df["recipientcountry_codename"].dropna().unique().tolist())
+    # 2) Filtro pais (multiselect con 'Todas'), pero solo se activa si region != "Todas"
+    df_filtered_for_region = df_original.copy()
+    if sel_region != "Todas":
+        df_filtered_for_region = df_filtered_for_region[df_filtered_for_region["region"] == sel_region]
+
+    if "recipientcountry_codename" in df_filtered_for_region.columns:
+        pais_list = sorted(df_filtered_for_region["recipientcountry_codename"].dropna().unique().tolist())
         opt_paises = ["Todas"] + pais_list
-        sel_paises = st.sidebar.multiselect("Pais(es):", opt_paises, default=["Todas"])
-        if "Todas" not in sel_paises:
-            if sel_paises:
-                df = df[df["recipientcountry_codename"].isin(sel_paises)]
-            else:
-                st.warning("No se seleccionó ningún país.")
-                return
+        # Solo habilitamos este multiselect si la región no es "Todas"
+        if sel_region == "Todas":
+            sel_paises = ["Todas"]  # No se selecciona nada
+            disabled_countries = True
+        else:
+            disabled_countries = False
 
-    # Filtro modalidad_general
+        sel_paises = st.sidebar.multiselect(
+            "Pais(es):",
+            opt_paises,
+            default=["Todas"],
+            disabled=disabled_countries
+        )
+    else:
+        sel_paises = ["Todas"]
+
+    # 3) Filtro modalidad_general
+    df = df_filtered_for_region.copy()  # Aplica region
     if "modalidad_general" in df.columns:
         m_list = sorted(df["modalidad_general"].dropna().unique().tolist())
         opt_m = ["Todas"] + m_list
@@ -311,15 +360,26 @@ def subpagina_flujos_agregados():
             df = df[df["modalidad_general"] == sel_mod]
 
     if df.empty:
-        st.warning("No hay datos tras region/pais/modalidad.")
+        st.warning("No hay datos tras los filtros de region/modalidad.")
         return
 
-    # Filtro montos (en millones)
+    # 4) Si sel_paises != ["Todas"], filtramos
+    if "Todas" not in sel_paises:
+        if sel_paises:
+            df = df[df["recipientcountry_codename"].isin(sel_paises)]
+        else:
+            st.warning("No se seleccionó ningún país.")
+            return
+
+    if df.empty:
+        st.warning("No hay datos tras filtrar país(es).")
+        return
+
+    # 5) Filtro montos (en millones)
     if "value_usd" in df.columns:
         df["value_usd_millions"] = df["value_usd"] / 1_000_000
         min_m = float(df["value_usd_millions"].min())
         max_m = float(df["value_usd_millions"].max())
-
         sel_range = st.sidebar.slider(
             "Rango Montos (Millones USD):",
             min_value=min_m,
@@ -335,7 +395,7 @@ def subpagina_flujos_agregados():
         st.warning("No hay datos tras filtrar por montos en millones.")
         return
 
-    # Filtro años
+    # 6) Filtro años
     min_y = df["transactiondate_isodate"].dt.year.min()
     max_y = df["transactiondate_isodate"].dt.year.max()
 
@@ -352,25 +412,35 @@ def subpagina_flujos_agregados():
         (df["transactiondate_isodate"] >= start_ts) &
         (df["transactiondate_isodate"] <= end_ts)
     ]
+
     if df.empty:
         st.warning("No hay datos tras filtrar por años.")
         return
 
+    # -----------------------------
+    # Seleccion de frecuencia
+    # -----------------------------
     freq_opts = ["Trimestral", "Semestral", "Anual"]
     st.markdown("**Frecuencia**")
     freq_choice = st.selectbox("", freq_opts, index=2, label_visibility="collapsed")
 
     if freq_choice == "Trimestral":
-        freq_code = "Q"
+        freq_code = "Q"  # para resample
         label_x = "Trimestre"
+        shift_periods = 4  # para cálculo yoy
     elif freq_choice == "Semestral":
-        freq_code = "6M"
+        # Podríamos hacer "6M" o "2Q"; usaremos "2Q" para que no se solape con trimestral
+        freq_code = "2Q"
         label_x = "Semestre"
+        shift_periods = 2
     else:
         freq_code = "A"
         label_x = "Año"
+        shift_periods = 1
 
-    # "Ver por"
+    # -----------------------------
+    # Seleccion "Ver por"
+    # -----------------------------
     vistas = ["Fechas", "Sectores"]
     vista = st.radio("Ver por:", vistas, horizontal=True)
 
@@ -390,6 +460,9 @@ def subpagina_flujos_agregados():
         "#8A84C6"
     ]
 
+    # -----------------------------
+    # Graficos Stacked
+    # -----------------------------
     if vista == "Fechas":
         df.set_index("transactiondate_isodate", inplace=True)
         df_agg = df["value_usd"].resample(freq_code).sum().reset_index()
@@ -469,7 +542,6 @@ def subpagina_flujos_agregados():
         top_agg = top_agg.sort_values("value_usd_millions", ascending=False)
         top_7 = top_agg["Sector"].head(7).tolist()
 
-        # Se cambia "Otros" por "OTROS"
         df_agg_sec["Sector_stack"] = df_agg_sec["Sector"].apply(lambda s: s if s in top_7 else "OTROS")
         df_agg_sec = df_agg_sec.groupby(["Periodo", "Sector_stack"], as_index=False)["value_usd_millions"].sum()
 
@@ -555,6 +627,108 @@ def subpagina_flujos_agregados():
             st.plotly_chart(fig_pct, use_container_width=True)
 
     st.info("Flujos agregados: Aprobaciones (Outgoing Commitments).")
+
+    # ----------------------------------------------------------------------------------
+    # NUEVA SECCIÓN: LÍNEA DE TASA DE CRECIMIENTO INTERANUAL (Afectada por Filtros)
+    # ----------------------------------------------------------------------------------
+    st.markdown("---")
+    st.markdown("## Tasa de Crecimiento Interanual (YoY)")
+
+    # A) Preparamos dataset global (sin filtro de región/país) pero SOLO con el rango de años
+    df_global = df_original.copy()
+    df_global["transactiondate_isodate"] = pd.to_datetime(df_global["transactiondate_isodate"])
+    # Rango de años global
+    df_global = df_global[
+        (df_global["transactiondate_isodate"] >= start_ts) &
+        (df_global["transactiondate_isodate"] <= end_ts)
+    ]
+
+    # B) Preparamos dataset de la región (si sel_region != "Todas")
+    if sel_region != "Todas":
+        df_region = df_global[df_global["region"] == sel_region].copy()
+    else:
+        df_region = pd.DataFrame()
+
+    # C) Para países seleccionados (si la región != "Todas" y si hay países != ["Todas"])
+    list_countries_data = []
+    if sel_region != "Todas" and ("Todas" not in sel_paises):
+        for c in sel_paises:
+            temp_df = df_region[df_region["recipientcountry_codename"] == c]
+            if not temp_df.empty:
+                list_countries_data.append((c, temp_df))
+
+    # --- Armamos un DF unificado con la tasa de crecimiento (YoY) ---
+    yoy_list = []
+
+    # 1) GLOBAL
+    if not df_global.empty:
+        yoy_g = compute_yoy(
+            df_global, 
+            date_col="transactiondate_isodate", 
+            value_col="value_usd", 
+            freq_code=freq_code, 
+            shift_periods=shift_periods
+        )
+        yoy_g["Categoria"] = "Global"
+        yoy_list.append(yoy_g)
+
+    # 2) REGION (si corresponde)
+    if not df_region.empty:
+        yoy_r = compute_yoy(
+            df_region,
+            date_col="transactiondate_isodate",
+            value_col="value_usd",
+            freq_code=freq_code,
+            shift_periods=shift_periods
+        )
+        yoy_r["Categoria"] = f"Región: {sel_region}"
+        yoy_list.append(yoy_r)
+
+    # 3) CADA PAÍS (si corresponde)
+    for (country_name, df_country) in list_countries_data:
+        yoy_c = compute_yoy(
+            df_country,
+            date_col="transactiondate_isodate",
+            value_col="value_usd",
+            freq_code=freq_code,
+            shift_periods=shift_periods
+        )
+        yoy_c["Categoria"] = f"País: {country_name}"
+        yoy_list.append(yoy_c)
+
+    if yoy_list:
+        df_yoy_final = pd.concat(yoy_list, ignore_index=True)
+
+        # Graficamos la columna "yoy" vs "Periodo", coloreado por "Categoria"
+        fig_yoy = px.line(
+            df_yoy_final,
+            x="Periodo",
+            y="yoy",
+            color="Categoria",
+            markers=True,
+            title="",  # Sin título interno
+            labels={
+                "Periodo": "Periodo",
+                "yoy": "Crec. Interanual (%)",
+                "Categoria": ""
+            }
+        )
+        fig_yoy.update_layout(
+            font_color="#FFFFFF",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="center",
+                x=0.5
+            )
+        )
+        st.plotly_chart(fig_yoy, use_container_width=True)
+    else:
+        st.warning("No se pudo calcular Tasa de Crecimiento Interanual con los filtros actuales.")
+
 
 # -----------------------------------------------------------------------------
 # PAGINA DESCRIPTIVO (DOS SUBPAGINAS)
