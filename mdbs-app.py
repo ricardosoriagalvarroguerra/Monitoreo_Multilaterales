@@ -169,7 +169,7 @@ def subpagina_ejecucion():
     """
     - Filtros de región, país, sector, modalidad.
     - Scatter “Aprobaciones Vs Ejecución”: size en función de value_usd.
-    - Scatter “Planificación Vs Ejecución”: SIN size en función de value_usd, 
+    - Scatter “Planificación Vs Ejecución”: SIN tamaño en value_usd, 
       pero con línea diagonal 45°.
     - Boxplots de duración y atraso según modalidad.
     """
@@ -629,7 +629,7 @@ def subpagina_flujos_agregados():
     st.info("Flujos agregados: Aprobaciones (Outgoing Commitments).")
 
     # ----------------------------------------------------------------------------------
-    # NUEVA SECCIÓN: DOS GRÁFICOS DE TASA DE CRECIMIENTO INTERANUAL (LINEAS SUAVIZADAS)
+    # NUEVA SECCIÓN: DOS GRÁFICOS DE TASA DE CRECIMIENTO INTERANUAL (EN BARRAS AGRUPADAS)
     # ----------------------------------------------------------------------------------
     st.markdown("---")
     st.markdown("## Tasa de Crecimiento Interanual (YoY)")
@@ -701,12 +701,13 @@ def subpagina_flujos_agregados():
         st.markdown("**(Izquierda) Crecimiento Interanual - General**")
         if yoy_list_all:
             df_yoy_final_all = pd.concat(yoy_list_all, ignore_index=True)
-            fig_yoy_all = px.line(
+            # Creamos un grouped bar chart
+            fig_yoy_all = px.bar(
                 df_yoy_final_all,
                 x="Periodo",
                 y="yoy",
                 color="Categoria",
-                markers=True,
+                barmode="group",
                 title="",  # Sin título interno
                 labels={
                     "Periodo": "Periodo",
@@ -714,8 +715,7 @@ def subpagina_flujos_agregados():
                     "Categoria": ""
                 }
             )
-            # Suavizamos líneas y agregamos línea punteada en y=0
-            fig_yoy_all.update_traces(line_shape="spline")
+            # Agregamos línea horizontal punteada en y=0
             fig_yoy_all.add_hline(
                 y=0,
                 line_dash="dot",
@@ -809,12 +809,12 @@ def subpagina_flujos_agregados():
 
         if yoy_list_mod:
             df_yoy_final_mod = pd.concat(yoy_list_mod, ignore_index=True)
-            fig_yoy_mod = px.line(
+            fig_yoy_mod = px.bar(
                 df_yoy_final_mod,
                 x="Periodo",
                 y="yoy",
                 color="Categoria",
-                markers=True,
+                barmode="group",
                 title="",  # Sin título interno
                 labels={
                     "Periodo": "Periodo",
@@ -822,8 +822,7 @@ def subpagina_flujos_agregados():
                     "Categoria": ""
                 }
             )
-            # Suavizamos líneas y agregamos línea punteada en y=0
-            fig_yoy_mod.update_traces(line_shape="spline")
+            # Agregamos línea horizontal punteada en y=0
             fig_yoy_mod.add_hline(
                 y=0,
                 line_dash="dot",
