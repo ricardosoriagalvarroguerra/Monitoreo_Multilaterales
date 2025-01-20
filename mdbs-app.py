@@ -93,7 +93,7 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
                 x="modalidad_general",
                 y="duracion_estimada",
                 color_discrete_sequence=["#ef233c"],
-                title="Distribucion de Duracion " + titulo_extra + " (Modalidad)",
+                title="",  # SIN título interno
                 labels={
                     "modalidad_general": "Modalidad General",
                     "duracion_estimada": "Duracion (años)"
@@ -115,7 +115,7 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
                 x="modalidad_general",
                 y="completion_delay_years",
                 color_discrete_sequence=["#edf2f4"],
-                title="Distribucion de Atraso " + titulo_extra + " (Modalidad)",
+                title="",  # SIN título interno
                 labels={
                     "modalidad_general": "Modalidad General",
                     "completion_delay_years": "Atraso (años)"
@@ -196,7 +196,7 @@ def subpagina_ejecucion():
                     x="duracion_estimada",
                     y="completion_delay_years",
                     color_discrete_sequence=["#00b4d8"],
-                    title="Aprobaciones Vs Ejecucion (Filtrado)",
+                    title="",  # SIN título interno
                     labels={
                         "duracion_estimada": "Duracion Est. (años)",
                         "completion_delay_years": "Atraso (años)"
@@ -228,7 +228,7 @@ def subpagina_ejecucion():
                     x="duracion_estimada",
                     y="duracion_real",
                     color_discrete_sequence=["#00b4d8"],
-                    title="Planificacion Vs Ejecucion (Filtrado)",
+                    title="",  # SIN título interno
                     labels={
                         "duracion_estimada": "Duracion Est. (años)",
                         "duracion_real": "Duracion Real (años)"
@@ -408,11 +408,11 @@ def subpagina_flujos_agregados():
             x="Periodo",
             y="value_usd_millions",
             color_discrete_sequence=["#c9182c"],
+            title="",  # SIN título interno
             labels={
                 "Periodo": label_x,
                 "value_usd_millions": "Monto (Millones USD)"
-            },
-            title=""
+            }
         )
         fig_time.update_layout(bargap=0, bargroupgap=0)
         fig_time.update_traces(marker_line_color="white", marker_line_width=1)
@@ -474,12 +474,12 @@ def subpagina_flujos_agregados():
             barmode="stack",
             category_orders={"Sector_stack": unique_sectors},
             color_discrete_sequence=color_palette,
+            title="",  # SIN título interno
             labels={
                 "Periodo": label_x,
                 "Sector_stack": "Sector",
                 "value_usd_millions": "Monto (Millones USD)"
-            },
-            title="Stacked Ordered Bar (Suma)"
+            }
         )
         fig_normal.update_layout(bargap=0, bargroupgap=0)
         fig_normal.update_traces(marker_line_color="white", marker_line_width=1)
@@ -504,12 +504,12 @@ def subpagina_flujos_agregados():
             barmode="stack",
             category_orders={"Sector_stack": unique_sectors},
             color_discrete_sequence=color_palette,
+            title="",  # SIN título interno
             labels={
                 "Periodo": label_x,
                 "Sector_stack": "Sector",
                 "pct_value": "Porcentaje (%)"
-            },
-            title="Stacked Ordered Bar (Porcentaje)"
+            }
         )
         fig_pct.update_layout(
             bargap=0,
@@ -517,15 +517,14 @@ def subpagina_flujos_agregados():
             font_color="#FFFFFF",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            # Ajuste de la leyenda para ubicarla debajo del título y centrarla
-            title_x=0.5,  # Centra el título
+            # Ajuste de la leyenda para ubicarla centrada y debajo del "subheader"
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
-                y=1.02,       # Ubica la leyenda un poco por debajo del título
+                y=1.02,
                 xanchor="center",
                 x=0.5,
-                font=dict(size=10)  # Ajusta tamaño de la leyenda
+                font=dict(size=10)
             ),
         )
         fig_pct.update_traces(marker_line_color="white", marker_line_width=1)
@@ -587,7 +586,7 @@ def series_temporales():
                 df_g,
                 x="apertura_date",
                 y="value_usd",
-                title="Series Temporales (Placeholder)",
+                title="",  # SIN título interno
                 labels={
                     "apertura_date": "Fecha",
                     "value_usd": "Valor (USD)"
@@ -641,7 +640,7 @@ def multidimensional_y_relaciones():
         fig_corr = px.imshow(
             corr,
             text_auto=True,
-            title="Matriz de Correlacion (Placeholder)"
+            title="",  # SIN título interno
         )
         fig_corr.update_layout(
             font_color="#FFFFFF",
