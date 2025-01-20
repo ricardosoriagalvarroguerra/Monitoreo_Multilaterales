@@ -1,6 +1,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objs as go
+from plotly.subplots import make_subplots
+
 from pygwalker.api.streamlit import StreamlitRenderer
 import pygwalker as pyg
 import folium
@@ -133,7 +136,7 @@ def compute_yoy(df: pd.DataFrame, date_col: str, value_col: str, freq_code: str,
     """
     Calcula la variación interanual (YoY) en base a `value_col`.
     YOY_t = [(value_t / value_{t-Δ}) - 1] * 100
-    Devuelve un DataFrame con columnas: [date_col, value_col, yoy, Periodo].
+    Retorna un DataFrame con columnas: [date_col, value_col, yoy, Periodo].
     """
     df_resampled = df.copy()
     df_resampled.set_index(date_col, inplace=True)
@@ -156,7 +159,6 @@ def compute_yoy(df: pd.DataFrame, date_col: str, value_col: str, freq_code: str,
         sm = (df_agg[date_col].dt.month.sub(1)//6).add(1)
         df_agg["Periodo"] = df_agg[date_col].dt.year.astype(str) + "S" + sm.astype(str)
     else:
-        # fallback mensual
         df_agg["Periodo"] = df_agg[date_col].dt.strftime("%Y-%m")
 
     return df_agg
@@ -168,8 +170,7 @@ def subpagina_ejecucion():
     """
     - Filtros de región, país, sector, modalidad.
     - Scatter “Aprobaciones Vs Ejecución”: size en función de value_usd.
-    - Scatter “Planificación Vs Ejecución”: SIN tamaño en value_usd, 
-      pero con línea diagonal 45°.
+    - Scatter “Planificación Vs Ejecución” (+ línea diagonal 45°).
     - Boxplots de duración y atraso según modalidad.
     """
     st.markdown('<p class="subtitle">Subpagina: Ejecucion</p>', unsafe_allow_html=True)
@@ -178,14 +179,14 @@ def subpagina_ejecucion():
 
     st.sidebar.subheader("Filtros (Ejecucion)")
 
-    # Filtro Region (si existe)
+    # --- Filtro Region ---
     if "region" in df_ejec.columns:
         regiones = sorted(df_ejec["region"].dropna().unique().tolist())
         sel_region = st.sidebar.selectbox("Region:", ["Todas"] + regiones, index=0)
         if sel_region != "Todas":
             df_ejec = df_ejec[df_ejec["region"] == sel_region]
 
-    # Filtro País (multiselect con 'Todas')
+    # --- Filtro País (multiselect con 'Todas') ---
     if "recipientcountry_codename" in df_ejec.columns:
         pais_list = sorted(df_ejec["recipientcountry_codename"].dropna().unique().tolist())
         opt_paises = ["Todas"] + pais_list
@@ -197,7 +198,7 @@ def subpagina_ejecucion():
                 st.warning("No se seleccionó ningún país.")
                 return
 
-    # Filtro Sector_1
+    # --- Filtro Sector_1 ---
     if "Sector_1" in df_ejec.columns:
         sec_list = sorted(df_ejec["Sector_1"].dropna().unique().tolist())
         opt_sec = ["General"] + sec_list
@@ -205,7 +206,7 @@ def subpagina_ejecucion():
         if sel_sec != "General":
             df_ejec = df_ejec[df_ejec["Sector_1"] == sel_sec]
 
-    # Filtro modalidad_general
+    # --- Filtro modalidad_general ---
     if "modalidad_general" in df_ejec.columns:
         mod_list = sorted(df_ejec["modalidad_general"].dropna().unique().tolist())
         opt_mod = ["Todas"] + mod_list
@@ -219,7 +220,7 @@ def subpagina_ejecucion():
 
     colA, colB = st.columns(2)
 
-    # Scatter 1: "Aprobaciones Vs Ejecucion" (Burbujas con size en value_usd)
+    # Scatter 1: "Aprobaciones Vs Ejecucion" (size en value_usd)
     with colA:
         st.subheader("Aprobaciones Vs Ejecucion")
         needed_1 = {"duracion_estimada", "completion_delay_years", "value_usd"}
@@ -236,10 +237,9 @@ def subpagina_ejecucion():
                     df_scat1,
                     x="duracion_estimada",
                     y="completion_delay_years",
-                    size="value_usd",   # tamaño en función de 'value_usd'
+                    size="value_usd",
                     size_max=40,
                     color_discrete_sequence=["#00b4d8"],
-                    title="",  # Sin título interno
                     labels={
                         "duracion_estimada": "Duracion Est. (años)",
                         "completion_delay_years": "Atraso (años)",
@@ -247,6 +247,7 @@ def subpagina_ejecucion():
                     }
                 )
                 fig1.update_layout(
+                    title="",  # Sin título interno
                     font_color="#FFFFFF",
                     paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(0,0,0,0)"
@@ -255,7 +256,7 @@ def subpagina_ejecucion():
         else:
             st.warning(f"Faltan columnas en DataFrame: {needed_1 - set(df_ejec.columns)}")
 
-    # Scatter 2: "Planificación Vs Ejecución" (SIN tamaño en value_usd) + diagonal 45°
+    # Scatter 2: "Planificacion Vs Ejecucion" (diagonal 45°)
     with colB:
         st.subheader("Planificacion Vs Ejecucion")
         needed_2 = {"duracion_estimada", "duracion_real"}
@@ -272,26 +273,20 @@ def subpagina_ejecucion():
                     x="duracion_estimada",
                     y="duracion_real",
                     color_discrete_sequence=["#00b4d8"],
-                    title="",  # Sin título interno
                     labels={
                         "duracion_estimada": "Duracion Est. (años)",
                         "duracion_real": "Duracion Real (años)"
                     }
                 )
-                # Agregamos la línea diagonal (45°)
-                max_val = max(
-                    df_scat2["duracion_estimada"].max(),
-                    df_scat2["duracion_real"].max()
-                )
+                # Agregamos línea diagonal (45°)
+                max_val = max(df_scat2["duracion_estimada"].max(), df_scat2["duracion_real"].max())
                 fig2.add_shape(
                     type="line",
-                    x0=0,
-                    y0=0,
-                    x1=max_val,
-                    y1=max_val,
+                    x0=0, y0=0, x1=max_val, y1=max_val,
                     line=dict(color="white", dash="dot")
                 )
                 fig2.update_layout(
+                    title="",  # Sin título interno
                     font_color="#FFFFFF",
                     paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(0,0,0,0)"
@@ -315,18 +310,18 @@ def subpagina_flujos_agregados():
     df_original["transactiondate_isodate"] = pd.to_datetime(df_original["transactiondate_isodate"])
 
     # -----------------------------
-    # Filtros en barra lateral
+    # Filtros
     # -----------------------------
     st.sidebar.subheader("Filtros (Flujos Agregados)")
 
-    # 1) Filtro region
+    # 1) Region
     if "region" in df_original.columns:
         region_list = sorted(df_original["region"].dropna().unique().tolist())
         sel_region = st.sidebar.selectbox("Region:", ["Todas"] + region_list, 0)
     else:
         sel_region = "Todas"
 
-    # 2) Filtro pais (multiselect con 'Todas'), habilitado solo si region != "Todas"
+    # 2) País (solo si region != "Todas")
     df_filtered_for_region = df_original.copy()
     if sel_region != "Todas":
         df_filtered_for_region = df_filtered_for_region[df_filtered_for_region["region"] == sel_region]
@@ -335,7 +330,6 @@ def subpagina_flujos_agregados():
         pais_list = sorted(df_filtered_for_region["recipientcountry_codename"].dropna().unique().tolist())
         opt_paises = ["Todas"] + pais_list
         if sel_region == "Todas":
-            # deshabilitamos el multiselect de país
             disabled_countries = True
             sel_paises = ["Todas"]
         else:
@@ -350,8 +344,8 @@ def subpagina_flujos_agregados():
     else:
         sel_paises = ["Todas"]
 
-    # 3) Filtro modalidad_general
-    df = df_filtered_for_region.copy()  # Aplica region
+    # 3) Modalidad (general)
+    df = df_filtered_for_region.copy()
     if "modalidad_general" in df.columns:
         m_list = sorted(df["modalidad_general"].dropna().unique().tolist())
         opt_m = ["Todas"] + m_list
@@ -363,7 +357,7 @@ def subpagina_flujos_agregados():
         st.warning("No hay datos tras los filtros de region/modalidad.")
         return
 
-    # 4) Filtro países si no es "Todas"
+    # 4) País
     if "Todas" not in sel_paises:
         if sel_paises:
             df = df[df["recipientcountry_codename"].isin(sel_paises)]
@@ -375,7 +369,7 @@ def subpagina_flujos_agregados():
         st.warning("No hay datos tras filtrar país(es).")
         return
 
-    # 5) Filtro montos (en millones)
+    # 5) Montos en millones
     if "value_usd" in df.columns:
         df["value_usd_millions"] = df["value_usd"] / 1_000_000
         min_m = float(df["value_usd_millions"].min())
@@ -395,7 +389,7 @@ def subpagina_flujos_agregados():
         st.warning("No hay datos tras filtrar por montos en millones.")
         return
 
-    # 6) Filtro años
+    # 6) Rango de años
     min_y = df["transactiondate_isodate"].dt.year.min()
     max_y = df["transactiondate_isodate"].dt.year.max()
 
@@ -418,7 +412,7 @@ def subpagina_flujos_agregados():
         return
 
     # -----------------------------
-    # Seleccion de frecuencia
+    # Frecuencia
     # -----------------------------
     freq_opts = ["Trimestral", "Semestral", "Anual"]
     st.markdown("**Frecuencia**")
@@ -438,7 +432,7 @@ def subpagina_flujos_agregados():
         shift_periods = 1
 
     # -----------------------------
-    # Seleccion "Ver por"
+    # Ver por: "Fechas" o "Sectores"
     # -----------------------------
     vistas = ["Fechas", "Sectores"]
     vista = st.radio("Ver por:", vistas, horizontal=True)
@@ -447,22 +441,11 @@ def subpagina_flujos_agregados():
         st.warning("No hay datos tras los filtros en Flujos Agregados.")
         return
 
-    # Paleta de colores
-    color_palette = [
-        "#4361ee",
-        "#E86D67",
-        "#FFFFFF",
-        "#59C3C3",
-        "#FBD48A",
-        "#B4B3B6",
-        "#22223B",
-        "#8A84C6"
-    ]
-
     # -----------------------------
-    # Graficos Stacked
+    # GRAFICOS
     # -----------------------------
     if vista == "Fechas":
+        # ============= VISTA FECHAS =============
         df.set_index("transactiondate_isodate", inplace=True)
         df_agg = df["value_usd"].resample(freq_code).sum().reset_index()
         df_agg["value_usd_millions"] = df_agg["value_usd"] / 1_000_000
@@ -484,7 +467,7 @@ def subpagina_flujos_agregados():
         else:
             df_agg["Periodo"] = df_agg["transactiondate_isodate"].dt.year.astype(str)
 
-        st.subheader("Evolución Aprobaciones (Millones USD)")
+        st.subheader("Stacked Ordered Bar (Fechas) - 1 Serie")
 
         if df_agg.empty:
             st.warning("No hay datos en este rango de años (Fechas).")
@@ -501,21 +484,19 @@ def subpagina_flujos_agregados():
                 "value_usd_millions": "Monto (Millones USD)"
             }
         )
-        fig_time.update_layout(bargap=0, bargroupgap=0)
-        fig_time.update_traces(marker_line_color="white", marker_line_width=1)
         fig_time.update_layout(
+            bargap=0,
+            bargroupgap=0,
             font_color="#FFFFFF",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)"
         )
+        fig_time.update_traces(marker_line_color="white", marker_line_width=1)
         st.plotly_chart(fig_time, use_container_width=True)
 
     else:
-        # MODO "Sectores"
-        if "Sector" not in df.columns:
-            st.warning("No existe la columna 'Sector' en OUTGOING_COMMITMENT_IADB.")
-            return
-
+        # ============= VISTA SECTORES =============
+        # 1) Creamos la columna "Periodo"
         if freq_choice == "Trimestral":
             df["Periodo"] = (
                 df["transactiondate_isodate"].dt.year.astype(str)
@@ -523,20 +504,22 @@ def subpagina_flujos_agregados():
                 + df["transactiondate_isodate"].dt.quarter.astype(str)
             )
         elif freq_choice == "Semestral":
-            sem = (df["transactiondate_isodate"].dt.month.sub(1)//6).add(1)
+            sm = (df["transactiondate_isodate"].dt.month.sub(1)//6).add(1)
             df["Periodo"] = (
                 df["transactiondate_isodate"].dt.year.astype(str)
                 + "S"
-                + sem.astype(str)
+                + sm.astype(str)
             )
         else:
             df["Periodo"] = df["transactiondate_isodate"].dt.year.astype(str)
 
+        # 2) Agrupacion en montos absolutos
         df_agg_sec = df.groupby(["Periodo", "Sector"], as_index=False)["value_usd_millions"].sum()
         if df_agg_sec.empty:
             st.warning("No hay datos en estos filtros (Sectores).")
             return
 
+        # 3) Top 7 + OTROS
         top_agg = df_agg_sec.groupby("Sector", as_index=False)["value_usd_millions"].sum()
         top_agg = top_agg.sort_values("value_usd_millions", ascending=False)
         top_7 = top_agg["Sector"].head(7).tolist()
@@ -548,58 +531,80 @@ def subpagina_flujos_agregados():
             st.warning("No hay datos después de agrupar top 7 + 'OTROS'.")
             return
 
-        sorted_top7 = sorted(top_7)
-        unique_sectors = sorted_top7 + ["OTROS"]
-
-        # Stacked bar normal
-        fig_normal = px.bar(
-            df_agg_sec,
-            x="Periodo",
-            y="value_usd_millions",
-            color="Sector_stack",
-            barmode="stack",
-            category_orders={"Sector_stack": unique_sectors},
-            color_discrete_sequence=color_palette,
-            title="",  # Sin título interno
-            labels={
-                "Periodo": label_x,
-                "Sector_stack": "Sector",
-                "value_usd_millions": "Monto (Millones USD)"
-            }
-        )
-        fig_normal.update_layout(bargap=0, bargroupgap=0)
-        fig_normal.update_traces(marker_line_color="white", marker_line_width=1)
-        fig_normal.update_layout(
-            font_color="#FFFFFF",
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            showlegend=False  # Ocultamos la leyenda en el stacked normal
-        )
-
-        # Percentage stacked bar
+        # 4) Preparamos dataset para la parte porcentual
+        # Hacemos pivot: filas = "Periodo", columnas = "Sector_stack", valores = "value_usd_millions"
         pivoted = df_agg_sec.pivot(index="Periodo", columns="Sector_stack", values="value_usd_millions").fillna(0)
         sums = pivoted.sum(axis=1)
         pivot_pct = pivoted.div(sums, axis=0) * 100
+        # Volvemos a "melt" para graficar con plotly
         df_pct = pivot_pct.reset_index().melt(id_vars="Periodo", var_name="Sector_stack", value_name="pct_value")
 
-        fig_pct = px.bar(
-            df_pct,
-            x="Periodo",
-            y="pct_value",
-            color="Sector_stack",
-            barmode="stack",
-            category_orders={"Sector_stack": unique_sectors},
-            color_discrete_sequence=color_palette,
-            title="",  # Sin título interno
-            labels={
-                "Periodo": label_x,
-                "Sector_stack": "Sector",
-                "pct_value": "Porcentaje (%)"
-            }
+        # 5) Lista ordenada de sectores (top7 + OTROS)
+        sorted_top7 = sorted(top_7)
+        unique_sectors = sorted_top7 + ["OTROS"]
+
+        # ----------------------------------------------------------------------------
+        # AHORA creamos UNA SOLA FIGURA con SUBPLOTS:
+        #  - Fila 1: stacked bar con valores absolutos
+        #  - Fila 2: stacked bar con porcentajes
+        #  Con legendgroup = sector para ocultar/mostrar en ambos subplots.
+        # ----------------------------------------------------------------------------
+        fig_subplots = make_subplots(
+            rows=2, cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.08,  # Espacio entre subgráficas
+            subplot_titles=(
+                "Evolución de aprobaciones (Millones USD)", 
+                "Evolución de aprobaciones (%)"
+            )
         )
-        fig_pct.update_layout(
-            bargap=0,
-            bargroupgap=0,
+
+        # Convertimos df_agg_sec en un df pivotado? 
+        # Realmente para stacked con subplots, podemos añadir un trace por cada sector en cada subplot.
+
+        # Preparamos la lista de periodos en orden
+        periodos_en_orden = sorted(df_agg_sec["Periodo"].unique())
+
+        # 5a) BARRAS (abs) en row=1
+        for sector_n in unique_sectors:
+            df_temp_abs = df_agg_sec[df_agg_sec["Sector_stack"] == sector_n]
+            # Mapeamos Periodo -> value_usd_millions
+            x_vals = df_temp_abs["Periodo"]
+            y_vals = df_temp_abs["value_usd_millions"]
+
+            fig_subplots.add_trace(
+                go.Bar(
+                    x=x_vals,
+                    y=y_vals,
+                    name=sector_n,
+                    legendgroup=sector_n,   # agrupa la leyenda
+                    showlegend=True,        # muestra la leyenda en la 1a subgráfica
+                ),
+                row=1, col=1
+            )
+
+        # 5b) BARRAS (% ) en row=2
+        for sector_n in unique_sectors:
+            df_temp_pct = df_pct[df_pct["Sector_stack"] == sector_n]
+            x_vals = df_temp_pct["Periodo"]
+            y_vals = df_temp_pct["pct_value"]
+
+            # showlegend=False para no duplicar la leyenda en la 2da subgráfica,
+            # pero usar el mismo legendgroup, así se oculta en ambas al hacer clic.
+            fig_subplots.add_trace(
+                go.Bar(
+                    x=x_vals,
+                    y=y_vals,
+                    name=sector_n,
+                    legendgroup=sector_n,
+                    showlegend=False
+                ),
+                row=2, col=1
+            )
+
+        # Ajustamos layout a barmode='stack'
+        fig_subplots.update_layout(
+            barmode="stack",
             font_color="#FFFFFF",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
@@ -608,30 +613,27 @@ def subpagina_flujos_agregados():
                 yanchor="bottom",
                 y=1.02,
                 xanchor="center",
-                x=0.5,
-                font=dict(size=10)
-            ),
+                x=0.5
+            )
         )
-        fig_pct.update_traces(marker_line_color="white", marker_line_width=1)
 
-        # Mostrar ambos gráficos en columnas, uno al lado del otro
-        col1, col2 = st.columns(2)
+        # Títulos en cada subplot
+        fig_subplots.update_xaxes(title_text=label_x, row=2, col=1)
+        fig_subplots.update_yaxes(title_text="Millones USD", row=1, col=1)
+        fig_subplots.update_yaxes(title_text="Porcentaje (%)", row=2, col=1)
 
-        with col1:
-            st.subheader("Evolución de aprobaciones (Millones USD)")
-            st.plotly_chart(fig_normal, use_container_width=True)
+        # Ajustes de trazo
+        fig_subplots.update_traces(marker_line_color="white", marker_line_width=1)
 
-        with col2:
-            st.subheader("Evolución de aprobaciones %")
-            st.plotly_chart(fig_pct, use_container_width=True)
+        st.plotly_chart(fig_subplots, use_container_width=True)
 
     st.info("Flujos agregados: Aprobaciones (Outgoing Commitments).")
 
-    # ----------------------------------------------------------------------------------
-    # NUEVA SECCIÓN: GRAFICO DE TASA DE CRECIMIENTO INTERANUAL (LINEA) - SOLO UNO
-    # ----------------------------------------------------------------------------------
+    # -----------------------------
+    # GRAFICO DE TASA DE CRECIMIENTO INTERANUAL
+    # -----------------------------
     st.markdown("---")
-    st.markdown("## Tasa de Crecimiento Aprobaciones (YoY)")
+    st.markdown("## Tasa de Crecimiento Interanual (YoY)")
 
     df_global_all = df_original.copy()
     df_global_all["transactiondate_isodate"] = pd.to_datetime(df_global_all["transactiondate_isodate"])
@@ -693,22 +695,21 @@ def subpagina_flujos_agregados():
 
     if yoy_list_all:
         df_yoy_final_all = pd.concat(yoy_list_all, ignore_index=True)
-        # Gráfico de línea (conforma la solicitud)
         fig_yoy_all = px.line(
             df_yoy_final_all,
             x="Periodo",
             y="yoy",
             color="Categoria",
             markers=True,
-            line_shape="spline",  # Suavizado
-            title="",  # Sin título interno
+            line_shape="spline",  # suavisado
+            title="",  # sin título interno
             labels={
                 "Periodo": "Periodo",
                 "yoy": "Crec. Interanual (%)",
                 "Categoria": ""
             }
         )
-        # Línea punteada en y=0 para distinguir negativo/positivo
+        # Línea punteada en y=0
         fig_yoy_all.add_hline(
             y=0,
             line_dash="dot",
