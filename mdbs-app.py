@@ -84,7 +84,7 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
     needed_cols_1 = {"modalidad_general", "duracion_estimada"}
     needed_cols_2 = {"modalidad_general", "completion_delay_years"}
 
-    # Box Plot (Duracion)
+    # Box Plot (Duración)
     if needed_cols_1.issubset(df.columns):
         df1 = df[df["modalidad_general"].notna() & df["duracion_estimada"].notna()]
         if not df1.empty:
@@ -93,10 +93,10 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
                 x="modalidad_general",
                 y="duracion_estimada",
                 color_discrete_sequence=["#ef233c"],
-                title="",  # SIN título interno
+                title="",  # Sin título interno
                 labels={
                     "modalidad_general": "Modalidad General",
-                    "duracion_estimada": "Duracion (años)"
+                    "duracion_estimada": "Duración (años)"
                 }
             )
             fig1.update_layout(
@@ -115,7 +115,7 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
                 x="modalidad_general",
                 y="completion_delay_years",
                 color_discrete_sequence=["#edf2f4"],
-                title="",  # SIN título interno
+                title="",  # Sin título interno
                 labels={
                     "modalidad_general": "Modalidad General",
                     "completion_delay_years": "Atraso (años)"
@@ -132,6 +132,16 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
 # SUBPAGINA EJECUCION (ACTIVITY_IADB)
 # -----------------------------------------------------------------------------
 def subpagina_ejecucion():
+    """
+    Mantiene toda la lógica original de Ejecución:
+      - Filtros de región, país, sector, modalidad.
+      - Dos scatter plots:
+         * "Aprobaciones Vs Ejecución" -> (duracion_estimada vs completion_delay_years)
+         * "Planificación Vs Ejecución" -> (duracion_estimada vs duracion_real)
+         * El tamaño del punto (size) es en función de 'value_usd'.
+         * En "Planificación Vs Ejecución" se añade la línea diagonal de 45° (línea punteada).
+      - Boxplot de la modalidad (duración y atraso).
+    """
     st.markdown('<p class="subtitle">Subpagina: Ejecucion</p>', unsafe_allow_html=True)
 
     df_ejec = DATASETS["ACTIVITY_IADB"].copy()
@@ -145,7 +155,7 @@ def subpagina_ejecucion():
         if sel_region != "Todas":
             df_ejec = df_ejec[df_ejec["region"] == sel_region]
 
-    # Filtro Pais (multiselect con 'Todas')
+    # Filtro País (multiselect con 'Todas')
     if "recipientcountry_codename" in df_ejec.columns:
         pais_list = sorted(df_ejec["recipientcountry_codename"].dropna().unique().tolist())
         opt_paises = ["Todas"] + pais_list
@@ -179,14 +189,15 @@ def subpagina_ejecucion():
 
     colA, colB = st.columns(2)
 
-    # Scatter 1
+    # Scatter 1: "Aprobaciones Vs Ejecucion"
     with colA:
         st.subheader("Aprobaciones Vs Ejecucion")
-        needed_1 = {"duracion_estimada", "completion_delay_years"}
+        needed_1 = {"duracion_estimada", "completion_delay_years", "value_usd"}
         if needed_1.issubset(df_ejec.columns):
             df_scat1 = df_ejec[
                 df_ejec["duracion_estimada"].notna() &
-                df_ejec["completion_delay_years"].notna()
+                df_ejec["completion_delay_years"].notna() &
+                df_ejec["value_usd"].notna()
             ]
             if df_scat1.empty:
                 st.warning("No hay datos en 'Aprobaciones Vs Ejecucion' tras filtrar.")
@@ -195,11 +206,14 @@ def subpagina_ejecucion():
                     df_scat1,
                     x="duracion_estimada",
                     y="completion_delay_years",
+                    size="value_usd",          # tamaño en función de 'value_usd'
+                    size_max=40,               # tamaño máximo de burbuja
                     color_discrete_sequence=["#00b4d8"],
-                    title="",  # SIN título interno
+                    title="",  # Sin título interno
                     labels={
                         "duracion_estimada": "Duracion Est. (años)",
-                        "completion_delay_years": "Atraso (años)"
+                        "completion_delay_years": "Atraso (años)",
+                        "value_usd": "Valor (USD)"
                     }
                 )
                 fig1.update_layout(
@@ -209,16 +223,17 @@ def subpagina_ejecucion():
                 )
                 st.plotly_chart(fig1, use_container_width=True)
         else:
-            st.warning(f"Faltan columnas: {needed_1 - set(df_ejec.columns)}")
+            st.warning(f"Faltan columnas en DataFrame: {needed_1 - set(df_ejec.columns)}")
 
-    # Scatter 2
+    # Scatter 2: "Planificacion Vs Ejecucion" + línea 45°
     with colB:
         st.subheader("Planificacion Vs Ejecucion")
-        needed_2 = {"duracion_estimada", "duracion_real"}
+        needed_2 = {"duracion_estimada", "duracion_real", "value_usd"}
         if needed_2.issubset(df_ejec.columns):
             df_scat2 = df_ejec[
                 df_ejec["duracion_estimada"].notna() &
-                df_ejec["duracion_real"].notna()
+                df_ejec["duracion_real"].notna() &
+                df_ejec["value_usd"].notna()
             ]
             if df_scat2.empty:
                 st.warning("No hay datos en 'Planificacion Vs Ejecucion' tras filtrar.")
@@ -227,14 +242,21 @@ def subpagina_ejecucion():
                     df_scat2,
                     x="duracion_estimada",
                     y="duracion_real",
+                    size="value_usd",          # tamaño en función de 'value_usd'
+                    size_max=40,
                     color_discrete_sequence=["#00b4d8"],
-                    title="",  # SIN título interno
+                    title="",  # Sin título interno
                     labels={
                         "duracion_estimada": "Duracion Est. (años)",
-                        "duracion_real": "Duracion Real (años)"
+                        "duracion_real": "Duracion Real (años)",
+                        "value_usd": "Valor (USD)"
                     }
                 )
-                max_val = max(df_scat2["duracion_estimada"].max(), df_scat2["duracion_real"].max())
+                # Agregamos la línea diagonal (45°)
+                max_val = max(
+                    df_scat2["duracion_estimada"].max(),
+                    df_scat2["duracion_real"].max()
+                )
                 fig2.add_shape(
                     type="line",
                     x0=0,
@@ -250,7 +272,7 @@ def subpagina_ejecucion():
                 )
                 st.plotly_chart(fig2, use_container_width=True)
         else:
-            st.warning(f"Faltan columnas: {needed_2 - set(df_ejec.columns)}")
+            st.warning(f"Faltan columnas en DataFrame: {needed_2 - set(df_ejec.columns)}")
 
     st.markdown("---")
     st.markdown("### Box Plots (Modalidad) - Filtrados")
@@ -408,7 +430,7 @@ def subpagina_flujos_agregados():
             x="Periodo",
             y="value_usd_millions",
             color_discrete_sequence=["#c9182c"],
-            title="",  # SIN título interno
+            title="",  # Sin título interno
             labels={
                 "Periodo": label_x,
                 "value_usd_millions": "Monto (Millones USD)"
@@ -474,7 +496,7 @@ def subpagina_flujos_agregados():
             barmode="stack",
             category_orders={"Sector_stack": unique_sectors},
             color_discrete_sequence=color_palette,
-            title="",  # SIN título interno
+            title="",  # Sin título interno
             labels={
                 "Periodo": label_x,
                 "Sector_stack": "Sector",
@@ -504,7 +526,7 @@ def subpagina_flujos_agregados():
             barmode="stack",
             category_orders={"Sector_stack": unique_sectors},
             color_discrete_sequence=color_palette,
-            title="",  # SIN título interno
+            title="",  # Sin título interno
             labels={
                 "Periodo": label_x,
                 "Sector_stack": "Sector",
@@ -517,7 +539,6 @@ def subpagina_flujos_agregados():
             font_color="#FFFFFF",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            # Ajuste de la leyenda para ubicarla centrada y debajo del "subheader"
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
@@ -564,11 +585,9 @@ def series_temporales():
     st.markdown('<h1 class="title">Series Temporales</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Ejemplo: line chart de un dataset (placeholder)</p>', unsafe_allow_html=True)
 
-    # Ejemplo: tomamos ACTIVITY_IADB si hay una columna "apertura_date" y "value_usd"
     df_temp = DATASETS["ACTIVITY_IADB"].copy()
     if "apertura_date" in df_temp.columns:  # ejemplo de fecha
         df_temp["apertura_date"] = pd.to_datetime(df_temp["apertura_date"])
-        # Filtrado
         min_date = df_temp["apertura_date"].min()
         max_date = df_temp["apertura_date"].max()
         sel_range = st.slider("Rango de fechas:", min_value=min_date, max_value=max_date, value=(min_date, max_date))
@@ -586,7 +605,7 @@ def series_temporales():
                 df_g,
                 x="apertura_date",
                 y="value_usd",
-                title="",  # SIN título interno
+                title="",  # Sin título interno
                 labels={
                     "apertura_date": "Fecha",
                     "value_usd": "Valor (USD)"
@@ -601,7 +620,7 @@ def series_temporales():
         else:
             st.info("No existe 'value_usd' para graficar en line chart.")
     else:
-        st.info("No existe 'apertura_date' (o la columna de fecha) en este dataset. Placeholder.")
+        st.info("No existe 'apertura_date' en este dataset. Placeholder.")
 
 # -----------------------------------------------------------------------------
 # ANALISIS GEOESPACIAL (EJEMPLO)
@@ -610,16 +629,16 @@ def analisis_geoespacial():
     st.markdown('<h1 class="title">Analisis Geoespacial</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Ejemplo: folium map con MarkerCluster (placeholder)</p>', unsafe_allow_html=True)
 
-    df_geo = DATASETS["ACTIVITY_IADB"].copy()  # si tu dataset geoespacial es ACTIVITY_IADB
+    df_geo = DATASETS["ACTIVITY_IADB"].copy()
     # Suponiendo hay columns lat, lon
     if "lat" in df_geo.columns and "lon" in df_geo.columns:
-        # map base
         m = folium.Map(location=[df_geo["lat"].mean(), df_geo["lon"].mean()], zoom_start=5)
         marker_cluster = MarkerCluster().add_to(m)
 
         for i, row in df_geo.iterrows():
             if not pd.isna(row["lat"]) and not pd.isna(row["lon"]):
-                folium.Marker(location=[row["lat"], row["lon"]], popup=str(row.get("Sector_1", "N/A"))).add_to(marker_cluster)
+                folium.Marker(location=[row["lat"], row["lon"]], 
+                              popup=str(row.get("Sector_1", "N/A"))).add_to(marker_cluster)
 
         st_folium(m, width=700, height=500)
     else:
@@ -633,14 +652,13 @@ def multidimensional_y_relaciones():
     st.markdown('<p class="subtitle">Ejemplo: matriz de correlacion (placeholder)</p>', unsafe_allow_html=True)
 
     df_multi = DATASETS["ACTIVITY_IADB"].copy()
-    # Supongamos tenemos numeric cols para correl
     numeric_cols = df_multi.select_dtypes(include=[float, int]).columns
     if len(numeric_cols) > 1:
         corr = df_multi[numeric_cols].corr()
         fig_corr = px.imshow(
             corr,
             text_auto=True,
-            title="",  # SIN título interno
+            title="",  # Sin título interno
         )
         fig_corr.update_layout(
             font_color="#FFFFFF",
@@ -649,7 +667,7 @@ def multidimensional_y_relaciones():
         )
         st.plotly_chart(fig_corr, use_container_width=True)
     else:
-        st.info("No hay suficientes columnas numericas para correlacion.")
+        st.info("No hay suficientes columnas numéricas para correlacionar.")
 
 # -----------------------------------------------------------------------------
 # MODELOS (EJEMPLO)
@@ -658,7 +676,7 @@ def modelos():
     st.markdown('<h1 class="title">Modelos</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Placeholder de entrenamiento de modelos</p>', unsafe_allow_html=True)
 
-    st.write("Ejemplo: Podrías cargar scikit-learn y entrenar un modelo. Placeholder...")
+    st.write("Ejemplo: Carga scikit-learn y entrena un modelo. Placeholder...")
 
 # -----------------------------------------------------------------------------
 # ANALISIS EXPLORATORIO (PyGWalker)
@@ -677,7 +695,7 @@ def analisis_exploratorio():
 # PAGINAS DEL MENU PRINCIPAL
 # -----------------------------------------------------------------------------
 def main_descriptivo():
-    # Redireccion a subpaginas
+    # Redirección a subpáginas
     descriptivo()
 
 def main_series_temporales():
