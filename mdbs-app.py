@@ -55,10 +55,6 @@ st.markdown(
 # -----------------------------------------------------------------------------
 @st.cache_data
 def load_dataframes():
-    """
-    Lee y devuelve los DataFrames usados en la aplicación.
-    Ajusta la ruta/parquet si es necesario.
-    """
     df_activity = pd.read_parquet("activity_iadb.parquet")  
     df_outgoing = pd.read_parquet("outgoing_commitment_iadb.parquet")
     df_disb = pd.read_parquet("disbursements_data.parquet")
@@ -73,7 +69,7 @@ def load_dataframes():
 DATASETS = load_dataframes()
 
 # -----------------------------------------------------------------------------
-# 2. CREACIÓN DEL RENDERER DE PYGWALKER (CACHÉ)
+# 2. PYGWALKER (CACHÉ)
 # -----------------------------------------------------------------------------
 @st.cache_resource
 def get_pyg_renderer_by_name(dataset_name: str):
@@ -83,13 +79,12 @@ def get_pyg_renderer_by_name(dataset_name: str):
     return renderer
 
 # -----------------------------------------------------------------------------
-# FUNCIONES AUXILIARES: BOX PLOTS
+# AUX: BOX PLOTS
 # -----------------------------------------------------------------------------
 def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
     needed_cols_1 = {"modalidad_general", "duracion_estimada"}
     needed_cols_2 = {"modalidad_general", "completion_delay_years"}
 
-    # Box Plot (Duración)
     if needed_cols_1.issubset(df.columns):
         df1 = df[df["modalidad_general"].notna() & df["duracion_estimada"].notna()]
         if not df1.empty:
@@ -111,7 +106,6 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
             )
             st.plotly_chart(fig1, use_container_width=True)
 
-    # Box Plot (Atraso)
     if needed_cols_2.issubset(df.columns):
         df2 = df[df["modalidad_general"].notna() & df["completion_delay_years"].notna()]
         if not df2.empty:
@@ -158,7 +152,6 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
         st.warning("No hay datos en Top 6 sectores.")
         return
 
-    # Box Plot (Duración)
     if needed_cols_1.issubset(df_top.columns):
         df1 = df_top[df_top["duracion_estimada"].notna()]
         if not df1.empty:
@@ -180,7 +173,6 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
             )
             st.plotly_chart(fig1, use_container_width=True)
 
-    # Box Plot (Atraso)
     if needed_cols_2.issubset(df_top.columns):
         df2 = df_top[df_top["completion_delay_years"].notna()]
         if not df2.empty:
@@ -300,7 +292,6 @@ def subpagina_ejecucion():
                         "duracion_real": "Duración Real (años)"
                     }
                 )
-                # línea diagonal
                 max_val = max(df_scat2["duracion_estimada"].max(), df_scat2["duracion_real"].max())
                 fig2.add_shape(
                     type="line",
@@ -335,17 +326,17 @@ def subpagina_ejecucion():
         boxplot_sector(df_box, titulo_extra="(Filtrado)")
 
 # -----------------------------------------------------------------------------
-# SUBPÁGINA: FLUJOS AGREGADOS (Cambios: Stacked Area + Percentage Stacked Area)
+# SUBPÁGINA: FLUJOS AGREGADOS
 # -----------------------------------------------------------------------------
 def subpagina_flujos_agregados():
     """
     Subpágina: Flujos Agregados
       - Filtros: Región->País (con 'Todas'), Modalidad, Frecuencia
       - "Ver por": [Fechas | Sectores]
-        -> Fechas: un chart area con #c9182c
+        -> Fechas: un area chart con color #c9182c (opaco)
         -> Sectores: 
-            * Apilado top 7 + "Otros" en area chart normal
-            * Abajo un Percentage Stacked Area con groupnorm='percent'
+            * Stacked Ordered Area Chart (Top 7 + 'Otros'), opaco
+            * Percentage Stacked Ordered Area Chart debajo, también opaco
     """
     st.markdown('<p class="subtitle">Subpágina: Flujos Agregados</p>', unsafe_allow_html=True)
 
@@ -354,40 +345,39 @@ def subpagina_flujos_agregados():
 
     st.sidebar.subheader("Filtros (Flujos Agregados)")
 
-    # 1) Filtro de Región
+    # 1) Región
     if "region" in df.columns:
         regiones = sorted(df["region"].dropna().unique().tolist())
-        sel_region = st.sidebar.selectbox("Región:", ["Todas"] + regiones, index=0)
+        sel_region = st.sidebar.selectbox("Región:", ["Todas"] + regiones, 0)
         if sel_region != "Todas":
             df = df[df["region"] == sel_region]
 
-    # 2) Filtro País (multiselect con 'Todas')
+    # 2) País(es) (MULTISELECT con "Todas")
     if "recipientcountry_codename" in df.columns:
         pais_list = sorted(df["recipientcountry_codename"].dropna().unique().tolist())
-        opciones_paises = ["Todas"] + pais_list
-        sel_paises = st.sidebar.multiselect("País(es):", opciones_paises, default=["Todas"])
+        opt_pais = ["Todas"] + pais_list
+        sel_paises = st.sidebar.multiselect("País(es):", opt_pais, default=["Todas"])
         
-        # Si 'Todas' está en la selección, no filtramos por país
         if "Todas" not in sel_paises:
-            if sel_paises:  # no vacío
+            if sel_paises:
                 df = df[df["recipientcountry_codename"].isin(sel_paises)]
             else:
-                st.warning("No se ha seleccionado ningún país.")
+                st.warning("No se seleccionó ningún país.")
                 return
 
-    # 3) Filtro Modalidad
+    # 3) Modalidad
     if "modality_general" in df.columns:
-        mods = sorted(df["modality_general"].dropna().unique().tolist())
-        sel_mod = st.sidebar.selectbox("Modalidad:", ["Todas"] + mods, index=0)
+        mod_list = sorted(df["modality_general"].dropna().unique().tolist())
+        sel_mod = st.sidebar.selectbox("Modalidad:", ["Todas"] + mod_list, 0)
         if sel_mod != "Todas":
             df = df[df["modality_general"] == sel_mod]
 
-    # Verificamos si hay datos
+    # Verificamos
     if df.empty:
-        st.warning("No hay datos tras estos filtros de Región/País/Modalidad.")
+        st.warning("No hay datos tras aplicar filtros (Región, País, Modalidad).")
         return
 
-    # 4) Filtro de Años
+    # 4) Rango Años
     min_year = df["transactiondate_isodate"].dt.year.min()
     max_year = df["transactiondate_isodate"].dt.year.max()
 
@@ -410,33 +400,32 @@ def subpagina_flujos_agregados():
         return
 
     # 5) Frecuencia
-    freq_opciones = ["Trimestral", "Semestral", "Anual"]
+    freqs = ["Trimestral", "Semestral", "Anual"]
     st.markdown("**Frecuencia**")
-    freq_choice = st.selectbox("", freq_opciones, index=2, label_visibility="collapsed")
+    freq_choice = st.selectbox("", freqs, index=2, label_visibility="collapsed")
 
     if freq_choice == "Trimestral":
         freq_code = "Q"
-        label_x = "Trimestre"
+        x_label = "Trimestre"
     elif freq_choice == "Semestral":
         freq_code = "6M"
-        label_x = "Semestre"
+        x_label = "Semestre"
     else:
         freq_code = "A"
-        label_x = "Año"
+        x_label = "Año"
 
-    # 6) "Ver por": Fechas o Sectores
+    # 6) "Ver por": Fechas / Sectores
     vista_opts = ["Fechas", "Sectores"]
     vista = st.radio("Ver por:", vista_opts, horizontal=True)
 
     if df.empty:
-        st.warning("No hay datos tras los filtros.")
+        st.warning("No hay datos tras estos filtros.")
         return
 
-    # Convertimos a millones
+    # value_usd -> millones
     df["value_usd_millions"] = df["value_usd"] / 1_000_000
 
-    # Paleta invertida + 'Otros' = #4361ee
-    # (Ejemplo con 8 colores)
+    # Paleta invertida + 'Otros' = #4361ee, 8 colores
     my_inverted_palette = [
         "#8A84C6",
         "#22223B",
@@ -445,14 +434,12 @@ def subpagina_flujos_agregados():
         "#59C3C3",
         "#FFFFFF",
         "#E86D67",
-        "#4361ee"  # "Otros"
+        "#4361ee"  # 'Otros'
     ]
 
     # -------------------------------------------------------------------------
-    # (A) MODO "Fechas": Stacked Area (1 sola 'categoría') con color #c9182c
+    #  A) Vista "Fechas" -> un area chart opaco
     # -------------------------------------------------------------------------
-    # Realmente, si es un solo "grupo", no se apilan entre sí,
-    # pero mantenemos la misma idea de un "area chart".
     if vista == "Fechas":
         df.set_index("transactiondate_isodate", inplace=True)
         df_agg = df["value_usd"].resample(freq_code).sum().reset_index()
@@ -475,40 +462,41 @@ def subpagina_flujos_agregados():
         else:
             df_agg["Periodo"] = df_agg["transactiondate_isodate"].dt.year.astype(str)
 
-        st.subheader("Área Chart (Fechas)")
+        st.subheader("Stacked Ordered Area Chart (Modo Fechas) - Solo 1 Serie")
 
         if df_agg.empty:
-            st.warning("No hay datos en este rango de años (Fechas).")
+            st.warning("No hay datos en este rango de años.")
             return
 
-        # Creamos un "Stacked Area" con 1 sola 'serie' => se ve un area chart simple
+        # Creamos un area chart para 1 sola 'serie'. 
+        # => Apilado no se ve, pero conserva la consistencia.
         fig_area_time = px.area(
             df_agg,
             x="Periodo",
             y="value_usd_millions",
             color_discrete_sequence=["#c9182c"],
-            title="Aprobaciones Área Chart (Modo Fechas)",
+            title="Area Chart - Fechas (Opaco)",
             labels={
-                "Periodo": label_x,
+                "Periodo": x_label,
                 "value_usd_millions": "Monto (Millones USD)"
             }
         )
-        # Evita huecos entre periodos => layout
+        # Sin transparencia
+        fig_area_time.update_traces(
+            stackgroup="one",
+            opacity=1  # opaco
+        )
         fig_area_time.update_layout(
             font_color="#FFFFFF",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)"
         )
-        # Borde en "area chart" no es tan usual, pero si deseas, se hace con 'line'
-        # px.area(...) en su traza, podemos set line_color, etc. 
-        # Por simplicidad, lo dejamos sin "line" en la orilla superior del area.
-
         st.plotly_chart(fig_area_time, use_container_width=True)
 
     # -------------------------------------------------------------------------
-    # (B) MODO "Sectores": 
-    #     1) Stacked Area (normal)
-    #     2) Percentage Stacked Area
+    #  B) Vista "Sectores" -> 
+    #       - 1) Stacked Ordered Area Chart (opaco)
+    #       - 2) Percentage Stacked Ordered Area Chart (opaco)
     # -------------------------------------------------------------------------
     else:
         if "Sector" not in df.columns:
@@ -531,12 +519,9 @@ def subpagina_flujos_agregados():
         else:
             df["Periodo"] = df["transactiondate_isodate"].dt.year.astype(str)
 
-        df_agg_sec = (
-            df.groupby(["Periodo", "Sector"], as_index=False)["value_usd_millions"]
-            .sum()
-        )
+        df_agg_sec = df.groupby(["Periodo", "Sector"], as_index=False)["value_usd_millions"].sum()
         if df_agg_sec.empty:
-            st.warning("No hay datos de Aprobaciones en estos filtros.")
+            st.warning("No hay datos de Aprobaciones en estos filtros (Sectores).")
             return
 
         # Top 7
@@ -550,17 +535,17 @@ def subpagina_flujos_agregados():
         # Re-agrupamos
         df_agg_sec = df_agg_sec.groupby(["Periodo", "Sector_stack"], as_index=False)["value_usd_millions"].sum()
 
-        st.subheader("Área Apilada por Sector (Top 7 + 'Otros')")
-
         if df_agg_sec.empty:
-            st.warning("No hay datos tras agrupar top 7 + Otros (Sectores).")
+            st.warning("No hay datos luego de agrupar top 7 + Otros.")
             return
 
         # Orden alfabético + "Otros" final
         sorted_top7 = sorted(top_7)
         unique_sectors = sorted_top7 + ["Otros"]
 
-        # 1) Área Apilada (normal)
+        st.subheader("Stacked Ordered Area Chart - Sectores (Opaco)")
+
+        # 1) Área normal (suma)
         fig_area_normal = px.area(
             df_agg_sec,
             x="Periodo",
@@ -570,16 +555,18 @@ def subpagina_flujos_agregados():
             color_discrete_sequence=my_inverted_palette,
             title="Área Apilada (Suma)",
             labels={
-                "Periodo": freq_choice,
+                "Periodo": x_label,
                 "Sector_stack": "Sector",
                 "value_usd_millions": "Monto (Millones USD)"
             },
-            groupnorm=None,   # Normal stacked, sum of values
-            line_group="Sector_stack",
-            # stackgroup='one' for area stacking
-            # groupnorm='...' used for the second chart
+            groupnorm=None,
+            line_group="Sector_stack"
         )
-        fig_area_normal.update_traces(stackgroup="one")  # Para apilar
+        # Apilado
+        fig_area_normal.update_traces(
+            stackgroup="one",
+            opacity=1  # sin transparencia
+        )
         fig_area_normal.update_layout(
             font_color="#FFFFFF",
             paper_bgcolor="rgba(0,0,0,0)",
@@ -587,9 +574,9 @@ def subpagina_flujos_agregados():
         )
         st.plotly_chart(fig_area_normal, use_container_width=True)
 
-        # 2) Área Apilada en Porcentajes
-        st.subheader("Área Apilada (Porcentaje)")
+        st.subheader("Percentage Stacked Ordered Area Chart - Sectores (Opaco)")
 
+        # 2) Área en Porcentajes
         fig_area_pct = px.area(
             df_agg_sec,
             x="Periodo",
@@ -597,16 +584,20 @@ def subpagina_flujos_agregados():
             color="Sector_stack",
             category_orders={"Sector_stack": unique_sectors},
             color_discrete_sequence=my_inverted_palette,
-            title="Área Apilada en Porcentaje",
+            title="Área Apilada (Porcentaje)",
             labels={
-                "Periodo": freq_choice,
+                "Periodo": x_label,
                 "Sector_stack": "Sector",
                 "value_usd_millions": "Porcentaje"
             },
-            groupnorm="percent",  # <-- Esto normaliza a 100% por cada x
-            line_group="Sector_stack",
+            groupnorm="percent",
+            line_group="Sector_stack"
         )
-        fig_area_pct.update_traces(stackgroup="one")  # Para apilar
+        # Apilado, opaco
+        fig_area_pct.update_traces(
+            stackgroup="one",
+            opacity=1
+        )
         fig_area_pct.update_layout(
             font_color="#FFFFFF",
             paper_bgcolor="rgba(0,0,0,0)",
