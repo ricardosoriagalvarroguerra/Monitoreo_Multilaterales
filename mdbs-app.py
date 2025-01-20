@@ -484,7 +484,7 @@ def subpagina_flujos_agregados():
         else:
             df_agg["Periodo"] = df_agg["transactiondate_isodate"].dt.year.astype(str)
 
-        st.subheader("Stacked Ordered Bar (Fechas) - 1 Serie")
+        st.subheader("Evolución Aprobaciones (Millones USD)")
 
         if df_agg.empty:
             st.warning("No hay datos en este rango de años (Fechas).")
@@ -631,7 +631,7 @@ def subpagina_flujos_agregados():
     # NUEVA SECCIÓN: GRAFICO DE TASA DE CRECIMIENTO INTERANUAL (LINEA) - SOLO UNO
     # ----------------------------------------------------------------------------------
     st.markdown("---")
-    st.markdown("## Tasa de Crecimiento Interanual (YoY)")
+    st.markdown("## Tasa de Crecimiento Aprobaciones (YoY)")
 
     df_global_all = df_original.copy()
     df_global_all["transactiondate_isodate"] = pd.to_datetime(df_global_all["transactiondate_isodate"])
