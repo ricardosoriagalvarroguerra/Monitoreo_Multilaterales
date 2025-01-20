@@ -133,14 +133,11 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
 # -----------------------------------------------------------------------------
 def subpagina_ejecucion():
     """
-    Mantiene toda la lógica original de Ejecución:
-      - Filtros de región, país, sector, modalidad.
-      - Dos scatter plots:
-         * "Aprobaciones Vs Ejecución" -> (duracion_estimada vs completion_delay_years)
-         * "Planificación Vs Ejecución" -> (duracion_estimada vs duracion_real)
-         * El tamaño del punto (size) es en función de 'value_usd'.
-         * En "Planificación Vs Ejecución" se añade la línea diagonal de 45° (línea punteada).
-      - Boxplot de la modalidad (duración y atraso).
+    - Filtros de región, país, sector, modalidad.
+    - Scatter “Aprobaciones Vs Ejecución”: size en función de value_usd.
+    - Scatter “Planificación Vs Ejecución”: SIN size en función de value_usd, 
+      pero con línea diagonal 45°.
+    - Boxplots de duración y atraso según modalidad.
     """
     st.markdown('<p class="subtitle">Subpagina: Ejecucion</p>', unsafe_allow_html=True)
 
@@ -189,7 +186,7 @@ def subpagina_ejecucion():
 
     colA, colB = st.columns(2)
 
-    # Scatter 1: "Aprobaciones Vs Ejecucion"
+    # Scatter 1: "Aprobaciones Vs Ejecución" (Burbujas con size en value_usd)
     with colA:
         st.subheader("Aprobaciones Vs Ejecucion")
         needed_1 = {"duracion_estimada", "completion_delay_years", "value_usd"}
@@ -206,8 +203,8 @@ def subpagina_ejecucion():
                     df_scat1,
                     x="duracion_estimada",
                     y="completion_delay_years",
-                    size="value_usd",          # tamaño en función de 'value_usd'
-                    size_max=40,               # tamaño máximo de burbuja
+                    size="value_usd",   # tamaño en función de 'value_usd'
+                    size_max=40,
                     color_discrete_sequence=["#00b4d8"],
                     title="",  # Sin título interno
                     labels={
@@ -225,15 +222,14 @@ def subpagina_ejecucion():
         else:
             st.warning(f"Faltan columnas en DataFrame: {needed_1 - set(df_ejec.columns)}")
 
-    # Scatter 2: "Planificacion Vs Ejecucion" + línea 45°
+    # Scatter 2: "Planificación Vs Ejecución" (SIN tamaño en value_usd) + diagonal 45°
     with colB:
         st.subheader("Planificacion Vs Ejecucion")
-        needed_2 = {"duracion_estimada", "duracion_real", "value_usd"}
+        needed_2 = {"duracion_estimada", "duracion_real"}
         if needed_2.issubset(df_ejec.columns):
             df_scat2 = df_ejec[
                 df_ejec["duracion_estimada"].notna() &
-                df_ejec["duracion_real"].notna() &
-                df_ejec["value_usd"].notna()
+                df_ejec["duracion_real"].notna()
             ]
             if df_scat2.empty:
                 st.warning("No hay datos en 'Planificacion Vs Ejecucion' tras filtrar.")
@@ -242,14 +238,11 @@ def subpagina_ejecucion():
                     df_scat2,
                     x="duracion_estimada",
                     y="duracion_real",
-                    size="value_usd",          # tamaño en función de 'value_usd'
-                    size_max=40,
                     color_discrete_sequence=["#00b4d8"],
                     title="",  # Sin título interno
                     labels={
                         "duracion_estimada": "Duracion Est. (años)",
-                        "duracion_real": "Duracion Real (años)",
-                        "value_usd": "Valor (USD)"
+                        "duracion_real": "Duracion Real (años)"
                     }
                 )
                 # Agregamos la línea diagonal (45°)
@@ -598,7 +591,6 @@ def series_temporales():
             st.warning("No hay datos en ese rango de fechas.")
             return
 
-        # Si hay value_usd
         if "value_usd" in df_temp.columns:
             df_g = df_temp.groupby(pd.Grouper(key="apertura_date", freq="M"))["value_usd"].sum().reset_index()
             fig_line = px.line(
@@ -695,7 +687,6 @@ def analisis_exploratorio():
 # PAGINAS DEL MENU PRINCIPAL
 # -----------------------------------------------------------------------------
 def main_descriptivo():
-    # Redirección a subpáginas
     descriptivo()
 
 def main_series_temporales():
