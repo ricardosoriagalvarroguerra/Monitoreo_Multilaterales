@@ -511,14 +511,24 @@ def subpagina_flujos_agregados():
             },
             title="Stacked Ordered Bar (Porcentaje)"
         )
-        fig_pct.update_layout(bargap=0, bargroupgap=0)
-        fig_pct.update_traces(marker_line_color="white", marker_line_width=1)
         fig_pct.update_layout(
+            bargap=0,
+            bargroupgap=0,
             font_color="#FFFFFF",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            legend=dict(font=dict(size=9))  # <-- Hacemos la leyenda más pequeña
+            # Ajuste de la leyenda para ubicarla debajo del título y centrarla
+            title_x=0.5,  # Centra el título
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,       # Ubica la leyenda un poco por debajo del título
+                xanchor="center",
+                x=0.5,
+                font=dict(size=10)  # Ajusta tamaño de la leyenda
+            ),
         )
+        fig_pct.update_traces(marker_line_color="white", marker_line_width=1)
 
         # Mostrar ambos gráficos en columnas, uno al lado del otro
         col1, col2 = st.columns(2)
