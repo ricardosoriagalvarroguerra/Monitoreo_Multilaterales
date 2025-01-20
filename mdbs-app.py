@@ -83,7 +83,7 @@ def get_pyg_renderer_by_name(dataset_name: str):
     return renderer
 
 # -----------------------------------------------------------------------------
-# FUNCIONES AUXILIARES: BOX PLOTS
+# FUNCIONES AUXILIARES (BOX PLOTS)
 # -----------------------------------------------------------------------------
 def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
     needed_cols_1 = {"modalidad_general", "duracion_estimada"}
@@ -300,6 +300,7 @@ def subpagina_ejecucion():
                         "duracion_real": "Duración Real (años)"
                     }
                 )
+                # línea diagonal
                 max_val = max(df_scat2["duracion_estimada"].max(), df_scat2["duracion_real"].max())
                 fig2.add_shape(
                     type="line",
@@ -334,39 +335,40 @@ def subpagina_ejecucion():
         boxplot_sector(df_box, titulo_extra="(Filtrado)")
 
 # -----------------------------------------------------------------------------
-# SUBPÁGINA: FLUJOS AGREGADOS (Stacked Ordered Bar Chart + Percentage)
+# SUBPÁGINA: FLUJOS AGREGADOS 
+#             (Stacked Ordered Bar Chart + Percentage, 
+#              sin data labels en el porcentaje, 
+#              invertimos el orden de la paleta)
 # -----------------------------------------------------------------------------
 def subpagina_flujos_agregados():
     """
-    Subpágina: Flujos Agregados (volvemos a Stacked Ordered Bar Chart)
+    Subpágina: Flujos Agregados
       - Filtros: Región->País('Todas'), Modalidad, Frecuencia
       - "Ver por": [Fechas | Sectores]
-        -> Fechas: Stacked bar normal (1 color c9182c)
+        -> Fechas: stacked bar normal (1 color c9182c)
         -> Sectores: 
-            * Stacked Ordered Bar Chart (Top 7 + 'Otros') normal
-            * Percentage Stacked Ordered Bar Chart
+           * Stacked Ordered Bar Chart (Top 7 + 'Otros')
+           * Percentage Stacked Ordered Bar Chart (sin data labels)
     """
     st.markdown('<p class="subtitle">Subpágina: Flujos Agregados</p>', unsafe_allow_html=True)
 
-    # Cargamos DataFrame
     df = DATASETS["OUTGOING_COMMITMENT_IADB"].copy()
     df["transactiondate_isodate"] = pd.to_datetime(df["transactiondate_isodate"])
 
     st.sidebar.subheader("Filtros (Flujos Agregados)")
 
-    # Filtro de Región
+    # 1) Región
     if "region" in df.columns:
         regiones = sorted(df["region"].dropna().unique().tolist())
         sel_region = st.sidebar.selectbox("Región:", ["Todas"] + regiones, index=0)
         if sel_region != "Todas":
             df = df[df["region"] == sel_region]
 
-    # Filtro de País (multiselect) con "Todas"
+    # 2) Países (multiselect) con "Todas"
     if "recipientcountry_codename" in df.columns:
         pais_list = sorted(df["recipientcountry_codename"].dropna().unique().tolist())
         opt_paises = ["Todas"] + pais_list
         sel_paises = st.sidebar.multiselect("País(es):", opt_paises, default=["Todas"])
-
         if "Todas" not in sel_paises:
             if sel_paises:
                 df = df[df["recipientcountry_codename"].isin(sel_paises)]
@@ -374,7 +376,7 @@ def subpagina_flujos_agregados():
                 st.warning("No se ha seleccionado ningún país.")
                 return
 
-    # Filtro Modalidad
+    # 3) Modalidad
     if "modality_general" in df.columns:
         mods = sorted(df["modality_general"].dropna().unique().tolist())
         sel_mod = st.sidebar.selectbox("Modalidad:", ["Todas"] + mods, index=0)
@@ -382,10 +384,10 @@ def subpagina_flujos_agregados():
             df = df[df["modality_general"] == sel_mod]
 
     if df.empty:
-        st.warning("No hay datos tras aplicar los filtros anteriores.")
+        st.warning("No hay datos tras aplicar esos filtros (Región/País/Modalidad).")
         return
 
-    # Filtro de Años
+    # 4) Años
     min_year = df["transactiondate_isodate"].dt.year.min()
     max_year = df["transactiondate_isodate"].dt.year.max()
 
@@ -407,15 +409,10 @@ def subpagina_flujos_agregados():
         st.warning("No hay datos tras filtrar por años.")
         return
 
-    # Frecuencia
+    # 5) Frecuencia
     freq_opciones = ["Trimestral", "Semestral", "Anual"]
     st.markdown("**Frecuencia**")
-    freq_choice = st.selectbox(
-        "",
-        freq_opciones,
-        index=2, 
-        label_visibility="collapsed"
-    )
+    freq_choice = st.selectbox("", freq_opciones, index=2, label_visibility="collapsed")
 
     if freq_choice == "Trimestral":
         freq_code = "Q"
@@ -427,40 +424,47 @@ def subpagina_flujos_agregados():
         freq_code = "A"
         label_x = "Año"
 
-    # "Ver por": Fechas o Sectores
+    # 6) "Ver por": Fechas o Sectores
     vista_options = ["Fechas", "Sectores"]
     vista = st.radio("Ver por:", vista_options, horizontal=True)
 
     if df.empty:
-        st.warning("No hay datos tras los filtros seleccionados.")
+        st.warning("No hay datos tras estos filtros.")
         return
 
-    # value_usd -> millones
+    # Convertir a millones
     df["value_usd_millions"] = df["value_usd"] / 1_000_000
 
-    # Paleta invertida, 'Otros' = #4361ee
+    # Paleta invertida (ordenado), 'Otros' = #4361ee 
+    # -> lo pondremos al INICIO para invertirse en la trama (o al final, según lo requieras).
+    # Normalmente, el primero en la lista sale "abajo" si barmode='stack'.
+    # 
+    # Para invertirlo completamente, la idea es que "Otros" aparezca al final en la leyenda.
+    # Por ejemplo:
     my_inverted_palette = [
-        "#8A84C6",
-        "#22223B",
-        "#B4B3B6",
-        "#FBD48A",
-        "#59C3C3",
-        "#FFFFFF",
+        "#4361ee",  # 'Otros' en la primera posición => APARECERÁ LA ÚLTIMA EN LA BARRA (depende de la lógica de Plotly, ojo)
         "#E86D67",
-        "#4361ee"  # 'Otros'
+        "#FFFFFF",
+        "#59C3C3",
+        "#FBD48A",
+        "#B4B3B6",
+        "#22223B",
+        "#8A84C6"
     ]
+    # Si no te agrada el orden final, puedes reacomodar. 
+    # De todos modos, en barmode='stack', Plotly apila según el orden interno de la data 
+    # y category_orders. 
 
     # -------------------------------------------------------------------------
-    #  MODO: "Fechas" -> stacked bar con 1 serie (c9182c) => solo se verá 1 color
+    # MODO "Fechas" -> stacked bar con 1 color (c9182c)
     # -------------------------------------------------------------------------
     if vista == "Fechas":
-        # Agrupamos por freq_code
         df.set_index("transactiondate_isodate", inplace=True)
         df_agg = df["value_usd"].resample(freq_code).sum().reset_index()
         df_agg["value_usd_millions"] = df_agg["value_usd"] / 1_000_000
         df.reset_index(inplace=True)
 
-        # Creamos Periodo
+        # Creamos la columna "Periodo"
         if freq_choice == "Trimestral":
             df_agg["Periodo"] = (
                 df_agg["transactiondate_isodate"].dt.year.astype(str)
@@ -477,13 +481,12 @@ def subpagina_flujos_agregados():
         else:
             df_agg["Periodo"] = df_agg["transactiondate_isodate"].dt.year.astype(str)
 
-        st.subheader("Stacked Ordered Bar (Fechas) - 1 Serie")
+        st.subheader("Stacked Ordered Bar Chart (Fechas) - 1 Serie")
 
         if df_agg.empty:
-            st.warning("No hay datos en este rango de años (Fechas).")
+            st.warning("No hay datos para las Fechas en ese rango.")
             return
 
-        # Bar chart "apilado" con 1 serie no se notará, pero quedará un color
         fig_bar_time = px.bar(
             df_agg,
             x="Periodo",
@@ -495,8 +498,9 @@ def subpagina_flujos_agregados():
             },
             title=""
         )
-        # Barras juntas y borde blanco
+        # Barras juntas
         fig_bar_time.update_layout(bargap=0, bargroupgap=0)
+        # Borde blanco
         fig_bar_time.update_traces(marker_line_color="white", marker_line_width=1)
         fig_bar_time.update_layout(
             font_color="#FFFFFF",
@@ -506,16 +510,15 @@ def subpagina_flujos_agregados():
         st.plotly_chart(fig_bar_time, use_container_width=True)
 
     # -------------------------------------------------------------------------
-    #  MODO: "Sectores" -> 
-    #      1) Stacked bar normal
-    #      2) Percentage stacked bar
+    # MODO "Sectores" -> 
+    #    1) Stacked bar normal
+    #    2) Percentage stacked bar (sin data labels)
     # -------------------------------------------------------------------------
     else:
         if "Sector" not in df.columns:
-            st.warning("No existe la columna 'Sector' en el DF.")
+            st.warning("No existe la columna 'Sector'.")
             return
 
-        # Creamos "Periodo"
         if freq_choice == "Trimestral":
             df["Periodo"] = (
                 df["transactiondate_isodate"].dt.year.astype(str)
@@ -532,8 +535,10 @@ def subpagina_flujos_agregados():
         else:
             df["Periodo"] = df["transactiondate_isodate"].dt.year.astype(str)
 
-        # Agrupamos
-        df_agg_sec = df.groupby(["Periodo", "Sector"], as_index=False)["value_usd_millions"].sum()
+        df_agg_sec = (
+            df.groupby(["Periodo", "Sector"], as_index=False)["value_usd_millions"]
+            .sum()
+        )
         if df_agg_sec.empty:
             st.warning("No hay datos de Aprobaciones en estos filtros (Sectores).")
             return
@@ -543,23 +548,22 @@ def subpagina_flujos_agregados():
         global_sum = global_sum.sort_values("value_usd_millions", ascending=False)
         top_7 = global_sum["Sector"].head(7).tolist()
 
-        # "Otros"
         df_agg_sec["Sector_stack"] = df_agg_sec["Sector"].apply(
             lambda s: s if s in top_7 else "Otros"
         )
         df_agg_sec = df_agg_sec.groupby(["Periodo", "Sector_stack"], as_index=False)["value_usd_millions"].sum()
 
-        st.subheader("Stacked Ordered Bar Chart (Sectores)")
-
         if df_agg_sec.empty:
-            st.warning("No hay datos tras agrupar top 7 + Otros.")
+            st.warning("No hay datos tras agrupar top 7 + 'Otros'.")
             return
 
-        # Orden alfabético + 'Otros' al final
+        # Orden alfabético + "Otros" final
         sorted_top7 = sorted(top_7)
         unique_sectors = sorted_top7 + ["Otros"]
 
-        # 1) Stacked bar normal (suma)
+        st.subheader("Stacked Ordered Bar Chart (Sectores)")
+
+        # 1) Normal
         fig_bar_normal = px.bar(
             df_agg_sec,
             x="Periodo",
@@ -569,13 +573,12 @@ def subpagina_flujos_agregados():
             category_orders={"Sector_stack": unique_sectors},
             color_discrete_sequence=my_inverted_palette,
             labels={
-                "Periodo": freq_choice,
+                "Periodo": label_x,
                 "Sector_stack": "Sector",
                 "value_usd_millions": "Monto (Millones USD)"
             },
             title="Stacked Ordered Bar (Suma)"
         )
-        # Barras pegadas, borde blanco
         fig_bar_normal.update_layout(bargap=0, bargroupgap=0)
         fig_bar_normal.update_traces(
             marker_line_color="white",
@@ -588,40 +591,15 @@ def subpagina_flujos_agregados():
         )
         st.plotly_chart(fig_bar_normal, use_container_width=True)
 
-        # 2) Percentage Stacked Bar
         st.subheader("Percentage Stacked Ordered Bar Chart (Sectores)")
 
-        fig_bar_pct = px.bar(
-            df_agg_sec,
-            x="Periodo",
-            y="value_usd_millions",
-            color="Sector_stack",
-            barmode="stack",
-            category_orders={"Sector_stack": unique_sectors},
-            color_discrete_sequence=my_inverted_palette,
-            labels={
-                "Periodo": freq_choice,
-                "Sector_stack": "Sector",
-                "value_usd_millions": "Porcentaje"
-            },
-            title="Stacked Ordered Bar (Porcentaje)",
-            text_auto=True  # Para ver % en las barras (opcional)
-        )
-        # Para mostrarlo en porcentaje, se usa groupnorm='percent' en px.bar no 
-        # existe directamente => una forma es crear un pivot y normalizar manual, 
-        # o usar la prop 'groupnorm' en px.bar. De momento, px.bar no tiene groupnorm 
-        # salvo en px.histogram. => SOLUCIÓN: normalizar manual o usar histfunc
-        # => Alternativa: manual normalization.
-
-        # Opción A: groupnorm="percent" no está implementado en px.bar (sólo en px.histogram)
-        # Opción B: normalizar manual: pivot, luego recalcular % por Periodo
-
-        # Normalizamos manual:
+        # 2) Porcentaje (sin data labels)
+        # Normalizar manual:
         pivoted = df_agg_sec.pivot(index="Periodo", columns="Sector_stack", values="value_usd_millions").fillna(0)
         pivoted_sum = pivoted.sum(axis=1)
-        pivoted_pct = pivoted.div(pivoted_sum, axis=0)*100
+        pivoted_pct = pivoted.div(pivoted_sum, axis=0) * 100
         df_pct = pivoted_pct.reset_index().melt(id_vars="Periodo", var_name="Sector_stack", value_name="pct_value")
-        # Re-grafica
+
         fig_bar_pct = px.bar(
             df_pct,
             x="Periodo",
@@ -631,18 +609,19 @@ def subpagina_flujos_agregados():
             category_orders={"Sector_stack": unique_sectors},
             color_discrete_sequence=my_inverted_palette,
             labels={
-                "Periodo": freq_choice,
+                "Periodo": label_x,
                 "Sector_stack": "Sector",
                 "pct_value": "Porcentaje (%)"
             },
             title="Stacked Ordered Bar (Porcentaje)",
-            text_auto='.2f'
+            # text_auto=True  # <-- se quita para NO mostrar data labels
         )
-        # Barras pegadas, borde
+        # Barras juntas, borde
         fig_bar_pct.update_layout(bargap=0, bargroupgap=0)
         fig_bar_pct.update_traces(
             marker_line_color="white",
-            marker_line_width=1
+            marker_line_width=1,
+            # text=None # para no mostrar labels
         )
         fig_bar_pct.update_layout(
             font_color="#FFFFFF",
@@ -669,7 +648,7 @@ def descriptivo():
         subpagina_flujos_agregados()
 
 # -----------------------------------------------------------------------------
-# OTRAS PÁGINAS (Placeholder)
+# OTRAS PÁGINAS (PLACEHOLDER)
 # -----------------------------------------------------------------------------
 def series_temporales():
     st.markdown('<h1 class="title">Series Temporales</h1>', unsafe_allow_html=True)
