@@ -342,13 +342,13 @@ def subpagina_ejecucion():
                     }
                 )
                 # Línea punteada blanca (45°)
-                max_range = max(df_scat2["duracion_estimada"].max(), df_scat2["duracion_real"].max())
+                max_val = max(df_scat2["duracion_estimada"].max(), df_scat2["duracion_real"].max())
                 fig2.add_shape(
                     type="line",
                     x0=0,
                     y0=0,
-                    x1=max_range,
-                    y1=max_range,
+                    x1=max_val,
+                    y1=max_val,
                     line=dict(color="white", dash="dot")
                 )
                 fig2.update_layout(
@@ -386,9 +386,9 @@ def subpagina_ejecucion():
 def subpagina_flujos_agregados():
     """
     Subpágina: Flujos Agregados
-      - Filtro de fechas (menú de navegación: barra lateral)
-      - Selección de frecuencia (Trimestral, Semestral, Anual)
-      - Dos gráficos de barras (Aprobaciones vs. Desembolsos) con color #d90429
+      - Slider de fecha en la barra lateral
+      - Selección de frecuencia (Trimestral, Semestral, Anual) por defecto Anual
+      - Dos gráficos de barras (Aprobaciones vs. Desembolsos) en millones, color #d90429
     """
     st.markdown('<p class="subtitle">Subpágina: Flujos Agregados</p>', unsafe_allow_html=True)
 
@@ -402,44 +402,41 @@ def subpagina_flujos_agregados():
     if "transactiondate_isodate" in df_disb.columns:
         df_disb["transactiondate_isodate"] = pd.to_datetime(df_disb["transactiondate_isodate"])
 
-    # 2) Filtro de Fechas en la barra lateral
+    # 2) Filtro de Fechas como slider en la barra lateral
     st.sidebar.subheader("Filtro de fechas (Flujos Agregados)")
     min_date_global = min(df_outgoing["transactiondate_isodate"].min(),
                           df_disb["transactiondate_isodate"].min())
     max_date_global = max(df_outgoing["transactiondate_isodate"].max(),
                           df_disb["transactiondate_isodate"].max())
 
-    fecha_inicio, fecha_fin = st.sidebar.date_input(
-        "Selecciona rango de fechas:",
-        value=[min_date_global, max_date_global],
+    start_date, end_date = st.sidebar.slider(
+        "Rango de fechas:",
         min_value=min_date_global,
-        max_value=max_date_global
+        max_value=max_date_global,
+        value=(min_date_global, max_date_global),
+        format="YYYY-MM-DD"
     )
-
-    # Ajuste si se recibe lista
-    if isinstance(fecha_inicio, list):
-        if len(fecha_inicio) == 2:
-            start, end = fecha_inicio
-        else:
-            start, end = fecha_inicio[0], fecha_inicio[0]
-    else:
-        start, end = fecha_inicio, fecha_fin
 
     # Filtramos
     df_outgoing_f = df_outgoing[
-        (df_outgoing["transactiondate_isodate"] >= pd.to_datetime(start)) &
-        (df_outgoing["transactiondate_isodate"] <= pd.to_datetime(end))
+        (df_outgoing["transactiondate_isodate"] >= pd.to_datetime(start_date)) &
+        (df_outgoing["transactiondate_isodate"] <= pd.to_datetime(end_date))
     ].copy()
 
     df_disb_f = df_disb[
-        (df_disb["transactiondate_isodate"] >= pd.to_datetime(start)) &
-        (df_disb["transactiondate_isodate"] <= pd.to_datetime(end))
+        (df_disb["transactiondate_isodate"] >= pd.to_datetime(start_date)) &
+        (df_disb["transactiondate_isodate"] <= pd.to_datetime(end_date))
     ].copy()
 
-    # 3) Selección de Frecuencia (Trimestral, Semestral, Anual)
+    # 3) Selección de Frecuencia (Trimestral, Semestral, Anual), por defecto = Anual
     freq_opciones = ["Trimestral", "Semestral", "Anual"]
-    st.markdown("##### Frecuencia de agregación:")
-    freq_choice = st.selectbox("", freq_opciones, index=0)
+    st.markdown("**Frecuencia**")
+    freq_choice = st.selectbox(
+        "", 
+        freq_opciones, 
+        index=2,  # 0->Trimestral, 1->Semestral, 2->Anual
+        label_visibility="collapsed"
+    )
 
     if freq_choice == "Trimestral":
         freq_code = "Q"   # Resample trimestral
@@ -448,12 +445,15 @@ def subpagina_flujos_agregados():
     else:  # Anual
         freq_code = "A"   # Resample anual
 
-    # 4) Agrupamos/Resample
+    # 4) Agrupamos/Resample y pasamos a millones
     df_outgoing_f.set_index("transactiondate_isodate", inplace=True)
     df_agg_outgoing = df_outgoing_f["value_usd"].resample(freq_code).sum().reset_index()
+    # Convertir a millones
+    df_agg_outgoing["value_usd_millions"] = df_agg_outgoing["value_usd"] / 1_000_000
 
     df_disb_f.set_index("transactiondate_isodate", inplace=True)
     df_agg_disb = df_disb_f["value_usd"].resample(freq_code).sum().reset_index()
+    df_agg_disb["value_usd_millions"] = df_agg_disb["value_usd"] / 1_000_000
 
     # 5) Dibujamos los gráficos de barras en dos columnas
     col1, col2 = st.columns(2)
@@ -466,11 +466,11 @@ def subpagina_flujos_agregados():
             fig_aprob = px.bar(
                 df_agg_outgoing,
                 x="transactiondate_isodate",
-                y="value_usd",
+                y="value_usd_millions",
                 color_discrete_sequence=["#d90429"],
                 labels={
                     "transactiondate_isodate": "Fecha",
-                    "value_usd": "Monto (USD)"
+                    "value_usd_millions": "Monto (Millones USD)"
                 },
                 title=""
             )
@@ -491,11 +491,11 @@ def subpagina_flujos_agregados():
             fig_desb = px.bar(
                 df_agg_disb,
                 x="transactiondate_isodate",
-                y="value_usd",
+                y="value_usd_millions",
                 color_discrete_sequence=["#d90429"],
                 labels={
                     "transactiondate_isodate": "Fecha",
-                    "value_usd": "Monto (USD)"
+                    "value_usd_millions": "Monto (Millones USD)"
                 },
                 title=""
             )
@@ -510,8 +510,9 @@ def subpagina_flujos_agregados():
 
     st.info("Gráficos de flujos agregados: Aprobaciones (Outgoing Commitments) vs Desembolsos.")
 
+
 # -----------------------------------------------------------------------------
-# PÁGINA "Descriptivo" (Dos SUBPÁGINAS)
+# PÁGINA "Descriptivo" (DOS SUBPÁGINAS)
 # -----------------------------------------------------------------------------
 def descriptivo():
     st.markdown('<h1 class="title">Descriptivo</h1>', unsafe_allow_html=True)
