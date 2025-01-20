@@ -95,8 +95,8 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
                 color_discrete_sequence=["#ef233c"],
                 title="Distribucion de Duracion " + titulo_extra + " (Modalidad)",
                 labels={
-                    "modality_general": "Modalidad General",
-                    "duracion_estimada": "Duracion (anos)"
+                    "modalidad_general": "Modalidad General",
+                    "duracion_estimada": "Duracion (años)"
                 }
             )
             fig1.update_layout(
@@ -118,7 +118,7 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
                 title="Distribucion de Atraso " + titulo_extra + " (Modalidad)",
                 labels={
                     "modalidad_general": "Modalidad General",
-                    "completion_delay_years": "Atraso (anos)"
+                    "completion_delay_years": "Atraso (años)"
                 }
             )
             fig2.update_layout(
@@ -154,7 +154,7 @@ def subpagina_ejecucion():
             if sel_paises:
                 df_ejec = df_ejec[df_ejec["recipientcountry_codename"].isin(sel_paises)]
             else:
-                st.warning("No se selecciono ningun pais.")
+                st.warning("No se seleccionó ningún país.")
                 return
 
     # Filtro Sector_1
@@ -198,8 +198,8 @@ def subpagina_ejecucion():
                     color_discrete_sequence=["#00b4d8"],
                     title="Aprobaciones Vs Ejecucion (Filtrado)",
                     labels={
-                        "duracion_estimada": "Duracion Est. (anos)",
-                        "completion_delay_years": "Atraso (anos)"
+                        "duracion_estimada": "Duracion Est. (años)",
+                        "completion_delay_years": "Atraso (años)"
                     }
                 )
                 fig1.update_layout(
@@ -230,8 +230,8 @@ def subpagina_ejecucion():
                     color_discrete_sequence=["#00b4d8"],
                     title="Planificacion Vs Ejecucion (Filtrado)",
                     labels={
-                        "duracion_estimada": "Duracion Est. (anos)",
-                        "duracion_real": "Duracion Real (anos)"
+                        "duracion_estimada": "Duracion Est. (años)",
+                        "duracion_real": "Duracion Real (años)"
                     }
                 )
                 max_val = max(df_scat2["duracion_estimada"].max(), df_scat2["duracion_real"].max())
@@ -284,7 +284,7 @@ def subpagina_flujos_agregados():
             if sel_paises:
                 df = df[df["recipientcountry_codename"].isin(sel_paises)]
             else:
-                st.warning("No se selecciono ningun pais.")
+                st.warning("No se seleccionó ningún país.")
                 return
 
     # Filtro modalidad_general
@@ -353,7 +353,7 @@ def subpagina_flujos_agregados():
         label_x = "Semestre"
     else:
         freq_code = "A"
-        label_x = "Ano"
+        label_x = "Año"
 
     # "Ver por"
     vistas = ["Fechas", "Sectores"]
@@ -422,6 +422,7 @@ def subpagina_flujos_agregados():
             plot_bgcolor="rgba(0,0,0,0)"
         )
         st.plotly_chart(fig_time, use_container_width=True)
+
     else:
         # MODO "Sectores"
         if "Sector" not in df.columns:
@@ -453,18 +454,18 @@ def subpagina_flujos_agregados():
         top_agg = top_agg.sort_values("value_usd_millions", ascending=False)
         top_7 = top_agg["Sector"].head(7).tolist()
 
-        df_agg_sec["Sector_stack"] = df_agg_sec["Sector"].apply(lambda s: s if s in top_7 else "Otros")
+        # Se cambia "Otros" por "OTROS"
+        df_agg_sec["Sector_stack"] = df_agg_sec["Sector"].apply(lambda s: s if s in top_7 else "OTROS")
         df_agg_sec = df_agg_sec.groupby(["Periodo", "Sector_stack"], as_index=False)["value_usd_millions"].sum()
 
-        st.subheader("Stacked Ordered Bar Chart (Sectores)")
-
         if df_agg_sec.empty:
-            st.warning("No hay datos despues de agrupar top 7 + 'Otros'.")
+            st.warning("No hay datos despues de agrupar top 7 + 'OTROS'.")
             return
 
         sorted_top7 = sorted(top_7)
-        unique_sectors = sorted_top7 + ["Otros"]
+        unique_sectors = sorted_top7 + ["OTROS"]
 
+        # Stacked bar normal
         fig_normal = px.bar(
             df_agg_sec,
             x="Periodo",
@@ -485,12 +486,11 @@ def subpagina_flujos_agregados():
         fig_normal.update_layout(
             font_color="#FFFFFF",
             paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)"
+            plot_bgcolor="rgba(0,0,0,0)",
+            showlegend=False  # <-- Ocultamos la leyenda en el stacked normal
         )
-        st.plotly_chart(fig_normal, use_container_width=True)
 
-        st.subheader("Percentage Stacked Ordered Bar Chart (Sectores)")
-
+        # Percentage stacked bar
         pivoted = df_agg_sec.pivot(index="Periodo", columns="Sector_stack", values="value_usd_millions").fillna(0)
         sums = pivoted.sum(axis=1)
         pivot_pct = pivoted.div(sums, axis=0) * 100
@@ -518,7 +518,17 @@ def subpagina_flujos_agregados():
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)"
         )
-        st.plotly_chart(fig_pct, use_container_width=True)
+
+        # Mostrar ambos gráficos en columnas, uno al lado del otro
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader("Stacked Ordered Bar Chart (Sectores)")
+            st.plotly_chart(fig_normal, use_container_width=True)
+
+        with col2:
+            st.subheader("Percentage Stacked Ordered Bar Chart (Sectores)")
+            st.plotly_chart(fig_pct, use_container_width=True)
 
     st.info("Flujos agregados: Aprobaciones (Outgoing Commitments).")
 
@@ -544,7 +554,7 @@ def series_temporales():
     st.markdown('<h1 class="title">Series Temporales</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Ejemplo: line chart de un dataset (placeholder)</p>', unsafe_allow_html=True)
 
-    # Ejemplo: tomamos ACTIVITY_IADB si hay una columna "fecha" y "value_usd"
+    # Ejemplo: tomamos ACTIVITY_IADB si hay una columna "apertura_date" y "value_usd"
     df_temp = DATASETS["ACTIVITY_IADB"].copy()
     if "apertura_date" in df_temp.columns:  # ejemplo de fecha
         df_temp["apertura_date"] = pd.to_datetime(df_temp["apertura_date"])
@@ -638,7 +648,7 @@ def modelos():
     st.markdown('<h1 class="title">Modelos</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Placeholder de entrenamiento de modelos</p>', unsafe_allow_html=True)
 
-    st.write("Ejemplo: Podrias cargar scikit-learn y entrenar un modelito. Placeholder...")
+    st.write("Ejemplo: Podrías cargar scikit-learn y entrenar un modelo. Placeholder...")
 
 # -----------------------------------------------------------------------------
 # ANALISIS EXPLORATORIO (PyGWalker)
