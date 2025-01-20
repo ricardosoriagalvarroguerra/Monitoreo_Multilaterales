@@ -547,11 +547,11 @@ def subpagina_flujos_agregados():
         col1, col2 = st.columns(2)
 
         with col1:
-            st.subheader("Stacked Ordered Bar Chart (Sectores)")
+            st.subheader("Evolución de aprobaciones (Millones USD)")
             st.plotly_chart(fig_normal, use_container_width=True)
 
         with col2:
-            st.subheader("Percentage Stacked Ordered Bar Chart (Sectores)")
+            st.subheader("%")
             st.plotly_chart(fig_pct, use_container_width=True)
 
     st.info("Flujos agregados: Aprobaciones (Outgoing Commitments).")
