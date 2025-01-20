@@ -297,7 +297,7 @@ def subpagina_ejecucion():
                     df_scat1,
                     x="duracion_estimada",
                     y="completion_delay_years",
-                    size="value_usd_millions",  # tamaño de punto basado en value_usd_millions
+                    size="value_usd_millions",
                     color_discrete_sequence=["#00b4d8"],
                     title="Aprobaciones Vs Ejecución (Filtrado)",
                     labels={
@@ -381,12 +381,12 @@ def subpagina_ejecucion():
 
 
 # -----------------------------------------------------------------------------
-# SUBPÁGINA: FLUJOS AGREGADOS
+# SUBPÁGINA: FLUJOS AGREGADOS (CON CORRECCIÓN DE SLIDER DE FECHAS)
 # -----------------------------------------------------------------------------
 def subpagina_flujos_agregados():
     """
     Subpágina: Flujos Agregados
-      - Slider de fecha en la barra lateral
+      - Slider de fecha en la barra lateral (conversión a tipo date nativo para evitar KeyError)
       - Selección de frecuencia (Trimestral, Semestral, Anual) por defecto Anual
       - Dos gráficos de barras (Aprobaciones vs. Desembolsos) en millones, color #d90429
     """
@@ -402,33 +402,43 @@ def subpagina_flujos_agregados():
     if "transactiondate_isodate" in df_disb.columns:
         df_disb["transactiondate_isodate"] = pd.to_datetime(df_disb["transactiondate_isodate"])
 
-    # 2) Filtro de Fechas como slider en la barra lateral
-    st.sidebar.subheader("Filtro de fechas (Flujos Agregados)")
+    # 2) Hallamos min y max como pandas Timestamps
     min_date_global = min(df_outgoing["transactiondate_isodate"].min(),
                           df_disb["transactiondate_isodate"].min())
     max_date_global = max(df_outgoing["transactiondate_isodate"].max(),
                           df_disb["transactiondate_isodate"].max())
 
+    # Convertimos a datetime.date para que Streamlit slider no genere error
+    min_date_slider = min_date_global.date()
+    max_date_slider = max_date_global.date()
+
+    st.sidebar.subheader("Filtro de fechas (Flujos Agregados)")
+
+    # 3) Creamos el slider de rango de fechas
     start_date, end_date = st.sidebar.slider(
         "Rango de fechas:",
-        min_value=min_date_global,
-        max_value=max_date_global,
-        value=(min_date_global, max_date_global),
+        min_value=min_date_slider,
+        max_value=max_date_slider,
+        value=(min_date_slider, max_date_slider),
         format="YYYY-MM-DD"
     )
 
+    # Convertir a Timestamps para filtrar el DataFrame
+    start_ts = pd.to_datetime(start_date)
+    end_ts = pd.to_datetime(end_date)
+
     # Filtramos
     df_outgoing_f = df_outgoing[
-        (df_outgoing["transactiondate_isodate"] >= pd.to_datetime(start_date)) &
-        (df_outgoing["transactiondate_isodate"] <= pd.to_datetime(end_date))
+        (df_outgoing["transactiondate_isodate"] >= start_ts) &
+        (df_outgoing["transactiondate_isodate"] <= end_ts)
     ].copy()
 
     df_disb_f = df_disb[
-        (df_disb["transactiondate_isodate"] >= pd.to_datetime(start_date)) &
-        (df_disb["transactiondate_isodate"] <= pd.to_datetime(end_date))
+        (df_disb["transactiondate_isodate"] >= start_ts) &
+        (df_disb["transactiondate_isodate"] <= end_ts)
     ].copy()
 
-    # 3) Selección de Frecuencia (Trimestral, Semestral, Anual), por defecto = Anual
+    # 4) Selección de Frecuencia (Trimestral, Semestral, Anual), por defecto = Anual
     freq_opciones = ["Trimestral", "Semestral", "Anual"]
     st.markdown("**Frecuencia**")
     freq_choice = st.selectbox(
@@ -445,17 +455,16 @@ def subpagina_flujos_agregados():
     else:  # Anual
         freq_code = "A"   # Resample anual
 
-    # 4) Agrupamos/Resample y pasamos a millones
+    # 5) Agrupamos/Resample y pasamos a millones
     df_outgoing_f.set_index("transactiondate_isodate", inplace=True)
     df_agg_outgoing = df_outgoing_f["value_usd"].resample(freq_code).sum().reset_index()
-    # Convertir a millones
     df_agg_outgoing["value_usd_millions"] = df_agg_outgoing["value_usd"] / 1_000_000
 
     df_disb_f.set_index("transactiondate_isodate", inplace=True)
     df_agg_disb = df_disb_f["value_usd"].resample(freq_code).sum().reset_index()
     df_agg_disb["value_usd_millions"] = df_agg_disb["value_usd"] / 1_000_000
 
-    # 5) Dibujamos los gráficos de barras en dos columnas
+    # 6) Dibujamos los gráficos de barras en dos columnas
     col1, col2 = st.columns(2)
 
     with col1:
