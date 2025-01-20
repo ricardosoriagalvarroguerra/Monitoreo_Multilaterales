@@ -629,7 +629,7 @@ def subpagina_flujos_agregados():
     st.info("Flujos agregados: Aprobaciones (Outgoing Commitments).")
 
     # ----------------------------------------------------------------------------------
-    # NUEVA SECCIÓN: DOS GRÁFICOS DE TASA DE CRECIMIENTO INTERANUAL
+    # NUEVA SECCIÓN: DOS GRÁFICOS DE TASA DE CRECIMIENTO INTERANUAL (LINEAS SUAVIZADAS)
     # ----------------------------------------------------------------------------------
     st.markdown("---")
     st.markdown("## Tasa de Crecimiento Interanual (YoY)")
@@ -637,8 +637,6 @@ def subpagina_flujos_agregados():
     # -----------------------------
     # 1) Gráfico principal (Global/Región/País)
     # -----------------------------
-    # A) Preparamos dataset GLOBAL (sin filtros de región/país/modalidad), 
-    #    pero SOLO con el rango de años:
     df_global_all = df_original.copy()
     df_global_all["transactiondate_isodate"] = pd.to_datetime(df_global_all["transactiondate_isodate"])
     df_global_all = df_global_all[
@@ -646,13 +644,13 @@ def subpagina_flujos_agregados():
         (df_global_all["transactiondate_isodate"] <= end_ts)
     ]
 
-    # B) Dataset de la región (sin filtrar modalidad todavía)
+    # dataset de la región
     if sel_region != "Todas":
         df_region_all = df_global_all[df_global_all["region"] == sel_region].copy()
     else:
         df_region_all = pd.DataFrame()
 
-    # C) Dataset de los países (dentro de la región)
+    # dataset de países
     list_countries_data_all = []
     if sel_region != "Todas" and ("Todas" not in sel_paises):
         for c in sel_paises:
@@ -660,9 +658,7 @@ def subpagina_flujos_agregados():
             if not temp_df.empty:
                 list_countries_data_all.append((c, temp_df))
 
-    # Construimos el DataFrame YOY principal
     yoy_list_all = []
-
     # i) Global
     if not df_global_all.empty:
         yoy_g_all = compute_yoy(
@@ -718,6 +714,13 @@ def subpagina_flujos_agregados():
                     "Categoria": ""
                 }
             )
+            # Suavizamos líneas y agregamos línea punteada en y=0
+            fig_yoy_all.update_traces(line_shape="spline")
+            fig_yoy_all.add_hline(
+                y=0,
+                line_dash="dot",
+                line_color="white"
+            )
             fig_yoy_all.update_layout(
                 font_color="#FFFFFF",
                 paper_bgcolor="rgba(0,0,0,0)",
@@ -740,19 +743,18 @@ def subpagina_flujos_agregados():
     with colYoY2:
         st.markdown("**(Derecha) Crecimiento Interanual - Por Modalidad**")
 
-        # - Filtramos de nuevo el df_original global (rango de años),
-        #   y ahora aplicamos la modalidad seleccionada (si es "Todas", es todo).
+        # - Filtramos df_global_all según modalidad
         df_global_mod = df_global_all.copy()
         if sel_mod != "Todas":
             df_global_mod = df_global_mod[df_global_mod["modalidad_general"] == sel_mod]
 
-        # - Filtramos region
+        # - Región
         if sel_region != "Todas":
             df_region_mod = df_global_mod[df_global_mod["region"] == sel_region].copy()
         else:
             df_region_mod = pd.DataFrame()
 
-        # - Filtramos los países
+        # - Países
         list_countries_data_mod = []
         if sel_region != "Todas" and ("Todas" not in sel_paises):
             for c in sel_paises:
@@ -820,6 +822,13 @@ def subpagina_flujos_agregados():
                     "Categoria": ""
                 }
             )
+            # Suavizamos líneas y agregamos línea punteada en y=0
+            fig_yoy_mod.update_traces(line_shape="spline")
+            fig_yoy_mod.add_hline(
+                y=0,
+                line_dash="dot",
+                line_color="white"
+            )
             fig_yoy_mod.update_layout(
                 font_color="#FFFFFF",
                 paper_bgcolor="rgba(0,0,0,0)",
@@ -835,7 +844,6 @@ def subpagina_flujos_agregados():
             st.plotly_chart(fig_yoy_mod, use_container_width=True)
         else:
             st.warning("No se pudo calcular Tasa de Crecimiento Interanual por modalidad.")
-
 
 # -----------------------------------------------------------------------------
 # PAGINA DESCRIPTIVO (DOS SUBPAGINAS)
