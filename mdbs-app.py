@@ -155,7 +155,7 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
         st.warning("No hay datos en Top 6 sectores.")
         return
 
-    # Box Plot 1 (Duración)
+    # Box Plot (Duración)
     if needed_cols_1.issubset(df_top.columns):
         df1 = df_top[df_top["duracion_estimada"].notna()]
         if not df1.empty:
@@ -177,7 +177,7 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
             )
             st.plotly_chart(fig1, use_container_width=True)
 
-    # Box Plot 2 (Atraso)
+    # Box Plot (Atraso)
     if needed_cols_2.issubset(df_top.columns):
         df2 = df_top[df_top["completion_delay_years"].notna()]
         if not df2.empty:
@@ -337,14 +337,13 @@ def subpagina_ejecucion():
 def subpagina_flujos_agregados():
     """
     Subpágina: Flujos Agregados
-      - Filtros: Región->País, Modalidad, Frecuencia (Trimestral, Semestral, Anual)
+      - Filtros: Región->País, Modalidad, Frecuencia
       - "Ver por": [Fechas | Sectores]
-        -> Fechas: bar chart vs tiempo color #c9182c (UNA sola color)
-        -> Sectores: stacked bar chart vs tiempo
-           + top 7 + "Otros"
-           + orden estable (sin reordenar por monto)
-           + Borde blanco en las barras
-           + bargap > 0 => barras más delgadas
+        -> Fechas: bar chart vs tiempo color #c9182c (una sola color)
+        -> Sectores: stacked bar chart vs tiempo con top 7 + "Otros"
+           * Sin reordenar por monto
+           * Borde blanco
+           * Sin espacios, y barras un poco anchas => bargap=0, bargroupgap=0
     """
     st.markdown('<p class="subtitle">Subpágina: Flujos Agregados</p>', unsafe_allow_html=True)
 
@@ -355,30 +354,30 @@ def subpagina_flujos_agregados():
 
     # Filtro Región
     if "region" in df.columns:
-        reg_list = sorted(df["region"].dropna().unique().tolist())
-        sel_reg = st.sidebar.selectbox("Región:", ["Todas"] + reg_list, 0)
-        if sel_reg != "Todas":
-            df = df[df["region"] == sel_reg]
+        regiones = sorted(df["region"].dropna().unique().tolist())
+        sel_region = st.sidebar.selectbox("Región:", ["Todas"] + regiones, 0)
+        if sel_region != "Todas":
+            df = df[df["region"] == sel_region]
 
     # Filtro País (multiselect)
     if "recipientcountry_codename" in df.columns:
-        pais_list = sorted(df["recipientcountry_codename"].dropna().unique().tolist())
-        sel_paises = st.sidebar.multiselect("País(es):", pais_list, default=pais_list)
+        paises = sorted(df["recipientcountry_codename"].dropna().unique().tolist())
+        sel_paises = st.sidebar.multiselect("País(es):", paises, default=paises)
         if sel_paises:
             df = df[df["recipientcountry_codename"].isin(sel_paises)]
 
     # Filtro Modalidad
     if "modality_general" in df.columns:
-        mod_list = sorted(df["modality_general"].dropna().unique().tolist())
-        sel_mod = st.sidebar.selectbox("Modalidad:", ["Todas"] + mod_list, index=0)
+        mods = sorted(df["modality_general"].dropna().unique().tolist())
+        sel_mod = st.sidebar.selectbox("Modalidad:", ["Todas"] + mods, 0)
         if sel_mod != "Todas":
             df = df[df["modality_general"] == sel_mod]
 
     if df.empty:
-        st.warning("No hay datos tras aplicar Región/País/Modalidad.")
+        st.warning("No hay datos tras filtros de Región/País/Modalidad.")
         return
 
-    # Filtro Años
+    # Filtro de Años
     min_year = df["transactiondate_isodate"].dt.year.min()
     max_year = df["transactiondate_isodate"].dt.year.max()
 
@@ -401,9 +400,9 @@ def subpagina_flujos_agregados():
         return
 
     # Frecuencia
-    freq_options = ["Trimestral", "Semestral", "Anual"]
+    freq_opciones = ["Trimestral", "Semestral", "Anual"]
     st.markdown("**Frecuencia**")
-    freq_choice = st.selectbox("", freq_options, index=2, label_visibility="collapsed")
+    freq_choice = st.selectbox("", freq_opciones, index=2, label_visibility="collapsed")
 
     if freq_choice == "Trimestral":
         freq_code = "Q"
@@ -416,17 +415,17 @@ def subpagina_flujos_agregados():
         label_x = "Año"
 
     # "Ver por"
-    vista_options = ["Fechas", "Sectores"]
-    vista = st.radio("Ver por:", vista_options, horizontal=True)
+    vista_opt = ["Fechas", "Sectores"]
+    vista = st.radio("Ver por:", vista_opt, horizontal=True)
 
     if df.empty:
-        st.warning("No hay datos tras los filtros de año.")
+        st.warning("No hay datos tras estos filtros.")
         return
 
-    # Convertimos a millones
+    # value_usd -> millones
     df["value_usd_millions"] = df["value_usd"] / 1_000_000
 
-    # Paleta en orden (abajo->arriba)
+    # Paleta (abajo->arriba)
     color_sequence = [
         "#590F1C",
         "#96031A",
@@ -435,11 +434,11 @@ def subpagina_flujos_agregados():
         "#FAA916",
         "#FBD48A",
         "#FBFFFE",
-        "#C9818C"
+        "#C9818C"  # "Otros"
     ]
 
     # -------------------------------------------------------------------------
-    # 1) MODO "FECHAS": color #c9182c (un solo color)
+    # MODO "FECHAS": un color #c9182c
     # -------------------------------------------------------------------------
     if vista == "Fechas":
         df.set_index("transactiondate_isodate", inplace=True)
@@ -447,7 +446,7 @@ def subpagina_flujos_agregados():
         df_agg["value_usd_millions"] = df_agg["value_usd"] / 1_000_000
         df.reset_index(inplace=True)
 
-        # Creamos columna "Periodo"
+        # Columna "Periodo"
         if freq_choice == "Trimestral":
             df_agg["Periodo"] = (
                 df_agg["transactiondate_isodate"].dt.year.astype(str)
@@ -455,11 +454,11 @@ def subpagina_flujos_agregados():
                 + df_agg["transactiondate_isodate"].dt.quarter.astype(str)
             )
         elif freq_choice == "Semestral":
-            semester = (df_agg["transactiondate_isodate"].dt.month.sub(1)//6).add(1)
+            sem = (df_agg["transactiondate_isodate"].dt.month.sub(1)//6).add(1)
             df_agg["Periodo"] = (
                 df_agg["transactiondate_isodate"].dt.year.astype(str)
                 + "S"
-                + semester.astype(str)
+                + sem.astype(str)
             )
         else:
             df_agg["Periodo"] = df_agg["transactiondate_isodate"].dt.year.astype(str)
@@ -470,7 +469,7 @@ def subpagina_flujos_agregados():
             st.warning("No hay datos en este rango de años.")
             return
 
-        # Graficamos con color #c9182c
+        # Bar chart con color #c9182c
         fig_time = px.bar(
             df_agg,
             x="Periodo",
@@ -482,12 +481,14 @@ def subpagina_flujos_agregados():
             },
             title=""
         )
-        # Ajustamos para barras más delgadas y borde blanco
-        fig_time.update_layout(bargap=0.7, bargroupgap=0)  # valor > 0 => barras más delgadas
+        # Sin espacios, barras anchas => bargap=0
+        fig_time.update_layout(bargap=0, bargroupgap=0)
+        # Borde blanco
         fig_time.update_traces(
             marker_line_color="white",
             marker_line_width=1
         )
+        # Ajustes para modo oscuro
         fig_time.update_layout(
             font_color="#FFFFFF",
             paper_bgcolor="rgba(0,0,0,0)",
@@ -496,14 +497,14 @@ def subpagina_flujos_agregados():
         st.plotly_chart(fig_time, use_container_width=True)
 
     # -------------------------------------------------------------------------
-    # 2) MODO "SECTORES": stacked bar
+    # MODO "SECTORES": Stacked bar
     # -------------------------------------------------------------------------
     else:
         if "Sector" not in df.columns:
             st.warning("No existe la columna 'Sector'.")
             return
 
-        # Creamos "Periodo"
+        # Crear "Periodo"
         if freq_choice == "Trimestral":
             df["Periodo"] = (
                 df["transactiondate_isodate"].dt.year.astype(str)
@@ -520,7 +521,6 @@ def subpagina_flujos_agregados():
         else:
             df["Periodo"] = df["transactiondate_isodate"].dt.year.astype(str)
 
-        # Agrupamos (Periodo, Sector)
         df_agg_sec = (
             df.groupby(["Periodo", "Sector"], as_index=False)["value_usd_millions"]
             .sum()
@@ -529,22 +529,22 @@ def subpagina_flujos_agregados():
             st.warning("No hay datos de Aprobaciones en estos filtros.")
             return
 
-        # Top 7
-        global_sum = df_agg_sec.groupby("Sector", as_index=False)["value_usd_millions"].sum()
-        global_sum = global_sum.sort_values("value_usd_millions", ascending=False)
-        top_7 = global_sum["Sector"].head(7).tolist()
-
+        # Top 7 -> "Otros"
+        sum_global = df_agg_sec.groupby("Sector", as_index=False)["value_usd_millions"].sum()
+        sum_global = sum_global.sort_values("value_usd_millions", ascending=False)
+        top_7 = sum_global["Sector"].head(7).tolist()
         df_agg_sec["Sector_stack"] = df_agg_sec["Sector"].apply(lambda s: s if s in top_7 else "Otros")
-        # Re-agrupamos para unificar "Otros"
+
+        # Re-agrupamos
         df_agg_sec = df_agg_sec.groupby(["Periodo", "Sector_stack"], as_index=False)["value_usd_millions"].sum()
 
         st.subheader("Aprobaciones Apiladas por Sector (Top 7 + Otros)")
 
         if df_agg_sec.empty:
-            st.warning("No hay datos luego de agrupar top 7 + Otros.")
+            st.warning("No hay datos tras agrupar Top 7 + Otros.")
             return
 
-        # Orden estable (alfabético) + "Otros" al final
+        # Orden estable alfabético, + "Otros" al final
         sorted_top7 = sorted(top_7)
         unique_sectors = sorted_top7 + ["Otros"]
 
@@ -563,12 +563,14 @@ def subpagina_flujos_agregados():
             },
             title=""
         )
-        # Ajustamos para barras más delgadas y borde blanco
-        fig_stack.update_layout(bargap=0.7, bargroupgap=0)
+        # Sin espacios => bargap=0, bargroupgap=0 => barras más anchas y pegadas
+        fig_stack.update_layout(bargap=0, bargroupgap=0)
+        # Borde blanco
         fig_stack.update_traces(
             marker_line_color="white",
             marker_line_width=1
         )
+        # Modo oscuro
         fig_stack.update_layout(
             font_color="#FFFFFF",
             paper_bgcolor="rgba(0,0,0,0)",
