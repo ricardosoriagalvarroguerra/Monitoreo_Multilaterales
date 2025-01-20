@@ -394,11 +394,11 @@ def subpagina_ejecucion():
 def subpagina_flujos_agregados():
     """
     Subpágina: Flujos Agregados
-      - Filtros: Región->País, Modalidad, Rango de años, Frecuencia (Trimestral, Semestral, Anual)
+      - Filtros: Región->País, Modalidad, Rango de años, Frecuencia
       - "Ver por": [Fechas | Sectores]
-        -> Fechas: bar chart vs tiempo
-        -> Sectores: bar chart vs tiempo, apilado (stacked) por Sector
-           con top 7 + 'Otros'
+        -> Fechas: bar chart vs tiempo (un solo color)
+        -> Sectores: bar chart vs tiempo, stacked con top 7 + "Otros"
+                     usando la paleta dada
     """
     st.markdown('<p class="subtitle">Subpágina: Flujos Agregados</p>', unsafe_allow_html=True)
 
@@ -407,9 +407,7 @@ def subpagina_flujos_agregados():
 
     st.sidebar.subheader("Filtros (Flujos Agregados)")
 
-    # 1) Filtros (Región, País, Modalidad, Años)
-    # -------------------------------------------------------------------------
-    # A) Región
+    # Filtro de Región
     if "region" in df.columns:
         regiones = sorted(df["region"].dropna().unique().tolist())
         regiones_op = ["Todas"] + regiones
@@ -417,14 +415,14 @@ def subpagina_flujos_agregados():
         if sel_region != "Todas":
             df = df[df["region"] == sel_region]
 
-    # B) País(es) (MULTISELECT)
+    # Filtro de País (multiselect)
     if "recipientcountry_codename" in df.columns:
         lista_paises = sorted(df["recipientcountry_codename"].dropna().unique().tolist())
         sel_paises = st.sidebar.multiselect("País(es):", lista_paises, default=lista_paises)
         if sel_paises:
             df = df[df["recipientcountry_codename"].isin(sel_paises)]
 
-    # C) Modalidad
+    # Filtro de Modalidad
     if "modality_general" in df.columns:
         lista_mods = sorted(df["modality_general"].dropna().unique().tolist())
         opciones_mods = ["Todas"] + lista_mods
@@ -432,11 +430,11 @@ def subpagina_flujos_agregados():
         if sel_mod != "Todas":
             df = df[df["modality_general"] == sel_mod]
 
-    # D) Años
     if df.empty:
         st.warning("No hay datos disponibles para configurar el rango de años (filtros de arriba).")
         return
 
+    # Slider de Años
     min_year = df["transactiondate_isodate"].dt.year.min()
     max_year = df["transactiondate_isodate"].dt.year.max()
 
@@ -456,13 +454,13 @@ def subpagina_flujos_agregados():
         (df["transactiondate_isodate"] <= end_ts)
     ].copy()
 
-    # 2) Frecuencia
+    # Frecuencia
     freq_opciones = ["Trimestral", "Semestral", "Anual"]
     st.markdown("**Frecuencia**")
     freq_choice = st.selectbox(
-        "", 
-        freq_opciones, 
-        index=2,  # Por defecto "Anual"
+        "",
+        freq_opciones,
+        index=2,
         label_visibility="collapsed"
     )
 
@@ -476,7 +474,7 @@ def subpagina_flujos_agregados():
         freq_code = "A"
         x_label = "Año"
 
-    # 3) "Ver por": Fechas | Sectores
+    # Opción "Ver por": Fechas o Sectores
     vista_opciones = ["Fechas", "Sectores"]
     vista = st.radio("Ver por:", vista_opciones, horizontal=True)
 
@@ -484,20 +482,49 @@ def subpagina_flujos_agregados():
         st.warning("No hay datos disponibles con los filtros seleccionados.")
         return
 
-    # Convertimos a millones
+    # value_usd -> millones
     df["value_usd_millions"] = df["value_usd"] / 1_000_000
 
+    # --------------------------------------------------------------------------------
+    # PALETA DE COLORES PERSONALIZADA
+    # (1) #FBFFFE
+    # (2) #96031A
+    # (3) #FAA916
+    # (4) #B4B3B6
+    # (5) #590F1C
+    # (6) #FBD48A
+    # (7) #C96C52
+    # (8) "Otros" -> #C9818C
+    # --------------------------------------------------------------------------------
+    # 1) Para "Fechas", usaremos un solo color (por ejemplo #FBFFFE).
+    single_color_sequence = ["#FBFFFE"]
+
+    # 2) Para "Sectores", definiremos un color map con top 7 y "Otros".
+    #    Asignaremos manualmente a cada sector su color, y "Otros" = #C9818C.
+    #    Notaremos que no sabemos con anticipación qué nombres tienen los 7 sectores,
+    #    pero luego de calcularlos, podemos construir un dict.
+    custom_top7_colors = [
+        "#FBFFFE",  # color 1
+        "#96031A",  # color 2
+        "#FAA916",  # color 3
+        "#B4B3B6",  # color 4
+        "#590F1C",  # color 5
+        "#FBD48A",  # color 6
+        "#C96C52"   # color 7
+    ]
+    color_otros = "#C9818C"
+
     # -------------------------------------------------------------------------
-    # (A) VER POR FECHAS: bar chart vs tiempo (sin stacking)
+    # (A) MODO: "Fechas"
     # -------------------------------------------------------------------------
     if vista == "Fechas":
-        # 1. Hacemos resample simple por freq_code (sum total por período)
+        # Resample a nivel global (sum por período)
         df.set_index("transactiondate_isodate", inplace=True)
         df_agg = df["value_usd"].resample(freq_code).sum().reset_index()
         df_agg["value_usd_millions"] = df_agg["value_usd"] / 1_000_000
         df.reset_index(inplace=True)
 
-        # 2. Creamos la columna "Periodo"
+        # Creamos "Periodo"
         if freq_choice == "Trimestral":
             df_agg["Periodo"] = (
                 df_agg["transactiondate_isodate"].dt.year.astype(str)
@@ -517,13 +544,13 @@ def subpagina_flujos_agregados():
         st.subheader("Aprobaciones (por Frecuencia)")
 
         if df_agg.empty:
-            st.warning("No hay datos de Aprobaciones en el rango de años seleccionado.")
+            st.warning("No hay datos de Aprobaciones en el rango seleccionado.")
         else:
             fig_time = px.bar(
                 df_agg,
                 x="Periodo",
                 y="value_usd_millions",
-                color_discrete_sequence=["#d90429"],
+                color_discrete_sequence=single_color_sequence,  # un solo color
                 labels={
                     "Periodo": x_label,
                     "value_usd_millions": "Monto (Millones USD)"
@@ -540,17 +567,14 @@ def subpagina_flujos_agregados():
             st.plotly_chart(fig_time, use_container_width=True)
 
     # -------------------------------------------------------------------------
-    # (B) VER POR SECTORES: bar chart vs tiempo APILADO (Top 7 + "Otros")
+    # (B) MODO: "Sectores"
     # -------------------------------------------------------------------------
     else:
-        # 1. Verificamos que exista la columna "Sector"
         if "Sector" not in df.columns:
             st.warning("No existe la columna 'Sector' para agrupar por sector.")
             return
 
-        # 2. Para agrupar por tiempo *y* sector, creamos la columna "Periodo"
-        #    y luego hacemos groupby(["Periodo", "Sector"]).
-        df["Periodo"] = None
+        # 1) Creamos la columna "Periodo" para agrupar en (Periodo, Sector)
         if freq_choice == "Trimestral":
             df["Periodo"] = (
                 df["transactiondate_isodate"].dt.year.astype(str)
@@ -567,52 +591,72 @@ def subpagina_flujos_agregados():
         else:
             df["Periodo"] = df["transactiondate_isodate"].dt.year.astype(str)
 
-        # 3. Sumamos 'value_usd_millions' por (Periodo, Sector)
-        df_agg_sec = df.groupby(["Periodo", "Sector"], as_index=False)["value_usd_millions"].sum()
+        # 2) Sumamos 'value_usd_millions' por (Periodo, Sector)
+        df_agg_sec = (
+            df.groupby(["Periodo", "Sector"], as_index=False)["value_usd_millions"]
+            .sum()
+        )
 
-        # 4. Determinamos top 7 sectores (en todo el rango) por sum(value_usd_millions)
-        top_7_list = (
+        # 3) Encontramos top 7 sectores (según la suma total en TODO el rango)
+        sum_global = (
             df_agg_sec.groupby("Sector", as_index=False)["value_usd_millions"]
             .sum()
             .sort_values("value_usd_millions", ascending=False)
-            .head(7)["Sector"]
-            .tolist()
         )
+        top_7_list = sum_global["Sector"].head(7).tolist()
 
-        # 5. Reemplazamos en df_agg_sec sectores no-top7 por "Otros"
+        # 4) Reemplazamos sectores no en top_7 por "Otros"
         df_agg_sec["Sector_stack"] = df_agg_sec["Sector"].apply(lambda s: s if s in top_7_list else "Otros")
 
-        # 6. Re-agrupamos para combinar todo lo "Otros"
+        # 5) Re-agrupamos para unificar "Otros"
         df_agg_sec = df_agg_sec.groupby(["Periodo", "Sector_stack"], as_index=False)["value_usd_millions"].sum()
 
         st.subheader("Aprobaciones Apiladas por Sector (Top 7 + Otros)")
 
         if df_agg_sec.empty:
-            st.warning("No hay datos de Aprobaciones en los filtros seleccionados.")
-        else:
-            # 7. Hacemos un bar chart apilado: x = "Periodo", color = "Sector_stack"
-            fig_stack = px.bar(
-                df_agg_sec,
-                x="Periodo",
-                y="value_usd_millions",
-                color="Sector_stack",
-                barmode="stack",
-                labels={
-                    "Periodo": x_label,
-                    "Sector_stack": "Sector",
-                    "value_usd_millions": "Monto (Millones USD)"
-                },
-                color_discrete_sequence=px.colors.qualitative.Dark24,
-                title=""
-            )
-            fig_stack.update_layout(
-                font_color="#FFFFFF",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                xaxis=dict(showgrid=False),
-                yaxis=dict(showgrid=False)
-            )
-            st.plotly_chart(fig_stack, use_container_width=True)
+            st.warning("No hay datos en los filtros seleccionados.")
+            return
+
+        # 6) Creamos un map de colores para top 7 + "Otros"
+        #    Asignamos color a cada sector del top 7 en orden, y "Otros" al final.
+        color_map = {}
+        # Recorremos la lista top_7_list y asignamos colores del array custom_top7_colors
+        custom_top7_colors = [
+            "#FBFFFE", "#96031A", "#FAA916", "#B4B3B6", "#590F1C", "#FBD48A", "#C96C52"
+        ]
+        for i, sec_name in enumerate(top_7_list):
+            if i < len(custom_top7_colors):
+                color_map[sec_name] = custom_top7_colors[i]
+            else:
+                # Si hubiera más de 7, por seguridad
+                color_map[sec_name] = "#FFFFFF"
+
+        # "Otros" -> #C9818C
+        color_map["Otros"] = "#C9818C"
+
+        # 7) Bar chart apilado (x=Periodo, y=value_usd_millions, color=Sector_stack)
+        fig_stack = px.bar(
+            df_agg_sec,
+            x="Periodo",
+            y="value_usd_millions",
+            color="Sector_stack",
+            barmode="stack",
+            labels={
+                "Periodo": x_label,
+                "Sector_stack": "Sector",
+                "value_usd_millions": "Monto (Millones USD)"
+            },
+            title="",
+            color_discrete_map=color_map
+        )
+        fig_stack.update_layout(
+            font_color="#FFFFFF",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(showgrid=False),
+            yaxis=dict(showgrid=False)
+        )
+        st.plotly_chart(fig_stack, use_container_width=True)
 
     st.info("Flujos agregados: Aprobaciones (Outgoing Commitments).")
 
