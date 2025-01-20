@@ -55,32 +55,30 @@ st.markdown(
 # -----------------------------------------------------------------------------
 @st.cache_data
 def load_dataframes():
-    # Ajusta estas rutas a tu entorno:
+    # Ajusta a tu entorno si difiere:
     df_activity = pd.read_parquet("activity_iadb.parquet")  
     df_outgoing = pd.read_parquet("outgoing_commitment_iadb.parquet")
     df_disb = pd.read_parquet("disbursements_data.parquet")
 
-    datasets = {
+    return {
         "ACTIVITY_IADB": df_activity,
         "OUTGOING_COMMITMENT_IADB": df_outgoing,
         "DISBURSEMENTS_DATA": df_disb
     }
-    return datasets
 
 DATASETS = load_dataframes()
 
 # -----------------------------------------------------------------------------
-# 2) CREACION DEL RENDERER DE PYGWALKER (CACHE)
+# 2) PYGWALKER (CACHE)
 # -----------------------------------------------------------------------------
 @st.cache_resource
 def get_pyg_renderer_by_name(dataset_name: str):
     from pygwalker.api.streamlit import StreamlitRenderer
     df = DATASETS[dataset_name]
-    renderer = StreamlitRenderer(df, kernel_computation=True)
-    return renderer
+    return StreamlitRenderer(df, kernel_computation=True)
 
 # -----------------------------------------------------------------------------
-# FUNCIONES AUXILIARES: BOX PLOTS
+# AUX: BOX PLOTS
 # -----------------------------------------------------------------------------
 def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
     needed_cols_1 = {"modality_general", "duracion_estimada"}
@@ -138,11 +136,13 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
     needed_cols_1 = {"Sector", "duracion_estimada"}
     needed_cols_2 = {"Sector", "completion_delay_years"}
 
+    # Filtra donde Sector y value_usd sean validos
     df_s = df[df["Sector"].notna() & df["value_usd"].notna()]
     if df_s.empty:
-        st.warning("No hay datos para Top 6 sectores.")
+        st.warning("No hay datos para top 6 sectores.")
         return
 
+    # Calcula top 6
     sum_sec = (
         df_s.groupby("Sector", as_index=False)["value_usd"]
         .sum()
@@ -152,7 +152,7 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
 
     df_top = df[df["Sector"].isin(top_6_list)].copy()
     if df_top.empty:
-        st.warning("No hay datos en Top 6 sectores.")
+        st.warning("No hay datos en top 6 sectores.")
         return
 
     # Box Plot (Duracion)
@@ -200,96 +200,63 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
             st.plotly_chart(fig2, use_container_width=True)
 
 # -----------------------------------------------------------------------------
-# SUBPAGINA: EJECUCION
+# SUBPAGINA: EJECUCION (NO cambiar variable Sector_1, mantener modalid_general)
 # -----------------------------------------------------------------------------
 def subpagina_ejecucion():
     """
     Subpagina: Ejecucion
-      - Filtros: 
-        * Sector
-        * activityscope_codename
-        * modalidad_general
-        * Montos (value_usd) en MILLONES
-      - Graficos: Aprobaciones Vs Ejecucion, Planificacion Vs Ejecucion, Box Plots
+      - Usa "ACTIVITY_IADB"
+      - Filtra por Sector_1 (no Sector!)
+      - Filtro de modalidad_general
+      - Mantener la logica original de Ejecucion (Scatter, Box, etc.)
     """
     st.markdown('<p class="subtitle">Subpagina: Ejecucion</p>', unsafe_allow_html=True)
 
+    # Cargamos dataset de EJECUCION (ACTIVITY_IADB)
     df_filters = DATASETS["ACTIVITY_IADB"].copy()
+
     st.sidebar.subheader("Filtros (Ejecucion)")
 
-    # 1) Filtro Sector
-    if "Sector" in df_filters.columns:
-        list_sec = sorted(df_filters["Sector"].dropna().unique().tolist())
+    # 1) Filtro Sector_1 (en lugar de "Sector")
+    if "Sector_1" in df_filters.columns:
+        list_sec = sorted(df_filters["Sector_1"].dropna().unique().tolist())
         opt_sec = ["General"] + list_sec
-        sel_sec = st.sidebar.selectbox("Sector:", opt_sec, index=0)
+        sel_sec = st.sidebar.selectbox("Sector_1:", opt_sec, index=0)
         if sel_sec != "General":
-            df_filters = df_filters[df_filters["Sector"] == sel_sec]
+            df_filters = df_filters[df_filters["Sector_1"] == sel_sec]
 
-    # 2) Filtro activityscope_codename
-    if "activityscope_codename" in df_filters.columns:
-        list_scope = sorted(df_filters["activityscope_codename"].dropna().unique().tolist())
-        opt_scope = ["General"] + list_scope
-        sel_scope = st.sidebar.selectbox("activityscope_codename:", opt_scope, index=0)
-        if sel_scope != "General":
-            df_filters = df_filters[df_filters["activityscope_codename"] == sel_scope]
-
-    # 3) Filtro Modalidad (modality_general)
-    if "modality_general" in df_filters.columns:
-        list_mod = sorted(df_filters["modality_general"].dropna().unique().tolist())
-        opt_mod = ["Todas"] + list_mod
+    # 2) Filtro modalidad_general
+    if "modalidad_general" in df_filters.columns:
+        mod_list = sorted(df_filters["modalidad_general"].dropna().unique().tolist())
+        opt_mod = ["Todas"] + mod_list
         sel_mod = st.sidebar.selectbox("Modalidad:", opt_mod, index=0)
         if sel_mod != "Todas":
-            df_filters = df_filters[df_filters["modality_general"] == sel_mod]
+            df_filters = df_filters[df_filters["modalidad_general"] == sel_mod]
 
-    # 4) Filtro Montos (MILLONES)
-    if "value_usd" in df_filters.columns:
-        df_filters["value_usd_millions"] = df_filters["value_usd"] / 1_000_000
-        min_mill = float(df_filters["value_usd_millions"].min())
-        max_mill = float(df_filters["value_usd_millions"].max())
-
-        rango_mill = st.sidebar.slider(
-            "Rango de Montos (Millones USD):",
-            min_value=min_mill,
-            max_value=max_mill,
-            value=(min_mill, max_mill)
-        )
-        df_filters = df_filters[
-            (df_filters["value_usd_millions"] >= rango_mill[0]) &
-            (df_filters["value_usd_millions"] <= rango_mill[1])
-        ]
-    else:
-        df_filters["value_usd_millions"] = None
-
-    if df_filters.empty:
-        st.warning("No hay datos tras aplicar filtros (Ejecucion).")
-        return
-
-    # Graficos
+    # Graficos: Aprobaciones Vs Ejecucion, Planificacion Vs Ejecucion
+    # (Asumiendo estas columnas existen: duracion_estimada, completion_delay_years, etc.)
     colA, colB = st.columns(2)
 
     with colA:
         st.subheader("Aprobaciones Vs Ejecucion")
-        needed_1 = {"duracion_estimada", "completion_delay_years", "value_usd_millions"}
+        needed_1 = {"duracion_estimada", "completion_delay_years"}
         if needed_1.issubset(df_filters.columns):
             df_scat1 = df_filters[
                 df_filters["duracion_estimada"].notna() &
-                df_filters["completion_delay_years"].notna() &
-                df_filters["value_usd_millions"].notna()
+                df_filters["completion_delay_years"].notna()
             ]
             if df_scat1.empty:
-                st.warning("No hay datos en 'Aprobaciones Vs Ejecucion' despues de filtrar.")
+                st.warning("No hay datos en 'Aprobaciones Vs Ejecucion' tras filtrar.")
             else:
                 fig1 = px.scatter(
                     df_scat1,
                     x="duracion_estimada",
                     y="completion_delay_years",
-                    size="value_usd_millions",
                     color_discrete_sequence=["#00b4d8"],
                     title="Aprobaciones Vs Ejecucion (Filtrado)",
                     labels={
                         "duracion_estimada": "Duracion Est. (anos)",
-                        "completion_delay_years": "Atraso (anos)",
-                        "value_usd_millions": "Value (Millones USD)"
+                        "completion_delay_years": "Atraso (anos)"
                     }
                 )
                 fig1.update_layout(
@@ -299,7 +266,7 @@ def subpagina_ejecucion():
                 )
                 st.plotly_chart(fig1, use_container_width=True)
         else:
-            st.warning(f"Faltan columnas: {needed_1 - set(df_filters.columns)}")
+            st.warning(f"No existen columnas suficientes: {needed_1 - set(df_filters.columns)}")
 
     with colB:
         st.subheader("Planificacion Vs Ejecucion")
@@ -310,7 +277,7 @@ def subpagina_ejecucion():
                 df_filters["duracion_real"].notna()
             ]
             if df_scat2.empty:
-                st.warning("No hay datos en 'Planificacion Vs Ejecucion' despues de filtrar.")
+                st.warning("No hay datos en 'Planificacion Vs Ejecucion' tras filtrar.")
             else:
                 fig2 = px.scatter(
                     df_scat2,
@@ -323,6 +290,7 @@ def subpagina_ejecucion():
                         "duracion_real": "Duracion Real (anos)"
                     }
                 )
+                # linea diagonal
                 max_val = max(df_scat2["duracion_estimada"].max(), df_scat2["duracion_real"].max())
                 fig2.add_shape(
                     type="line",
@@ -339,38 +307,33 @@ def subpagina_ejecucion():
                 )
                 st.plotly_chart(fig2, use_container_width=True)
         else:
-            st.warning(f"Faltan columnas: {needed_2 - set(df_filters.columns)}")
+            st.warning(f"No existen columnas suficientes: {needed_2 - set(df_filters.columns)}")
 
     st.markdown("---")
-    st.markdown("### Box Plots (Modalidad, Sector) - Filtrados")
+    st.markdown("### Box Plots (Modalidad) - Filtrados")
 
+    # Si deseas box plots por Sector_1, se podria. O solo por modalidad (lo que tenias)
     df_box = df_filters.copy()
-    tab_mod, tab_sec = st.tabs(["Modalidad", "Sector"])
 
-    with tab_mod:
-        st.subheader("Box Plots - Modalidad (Filtrado)")
-        boxplot_modalidad(df_box, titulo_extra="(Filtrado)")
+    # Box Plot segun modalidad
+    boxplot_modalidad(df_box, titulo_extra="(Filtrado Ejecucion)")
 
-    with tab_sec:
-        st.subheader("Box Plots - Sector (Filtrado, Top 6)")
-        boxplot_sector(df_box, titulo_extra="(Filtrado)")
+    # O si tenias sector con top6, adaptalo a Sector_1. 
+    # Por el enunciado, no se solicito un box-plot segun Sector_1, 
+    # si lo deseas, implementalo análogo. De lo contrario, omitelo.
+
 
 # -----------------------------------------------------------------------------
-# SUBPAGINA: FLUJOS AGREGADOS
+# SUBPAGINA: FLUJOS AGREGADOS (usa variable Sector, y filter de modalidad_general)
 # -----------------------------------------------------------------------------
 def subpagina_flujos_agregados():
     """
     Subpagina: Flujos Agregados
-      - Filtros: 
-          * Region->Pais('Todas')
-          * Modalidad (modality_general)
-          * Frecuencia
-          * Montos (value_usd) en MILLONES
-      - "Ver por": [Fechas | Sectores]
-        -> Fechas: stacked bar (1 color #c9182c)
-        -> Sectores: 
-           * Stacked Ordered Bar Chart (Top 7 + 'Otros')
-           * Percentage Stacked Ordered Bar Chart (sin data labels)
+      - Usa "OUTGOING_COMMITMENT_IADB"
+      - Filtra por Sector (top 7 + 'Otros')
+      - Filtro de modalidad_general
+      - Filtro de Montos (value_usd) en MILLONES
+      - Stacked bar normal y porcentaje
     """
     st.markdown('<p class="subtitle">Subpagina: Flujos Agregados</p>', unsafe_allow_html=True)
 
@@ -379,58 +342,35 @@ def subpagina_flujos_agregados():
 
     st.sidebar.subheader("Filtros (Flujos Agregados)")
 
-    # 1) Filtro Region
-    if "region" in df.columns:
-        regiones = sorted(df["region"].dropna().unique().tolist())
-        sel_region = st.sidebar.selectbox("Region:", ["Todas"] + regiones, 0)
-        if sel_region != "Todas":
-            df = df[df["region"] == sel_region]
-
-    # 2) Filtro Pais (multiselect con 'Todas')
-    if "recipientcountry_codename" in df.columns:
-        pais_list = sorted(df["recipientcountry_codename"].dropna().unique().tolist())
-        opt_paises = ["Todas"] + pais_list
-        sel_paises = st.sidebar.multiselect("Pais(es):", opt_paises, default=["Todas"])
-        if "Todas" not in sel_paises:
-            if sel_paises:
-                df = df[df["recipientcountry_codename"].isin(sel_paises)]
-            else:
-                st.warning("No se selecciono ningun pais.")
-                return
-
-    # 3) Filtro Modalidad
-    if "modality_general" in df.columns:
-        mods = sorted(df["modality_general"].dropna().unique().tolist())
-        sel_mod = st.sidebar.selectbox("Modalidad:", ["Todas"] + mods, 0)
+    # 1) Modalidad (modalidad_general)
+    if "modalidad_general" in df.columns:
+        mods = sorted(df["modalidad_general"].dropna().unique().tolist())
+        sel_mod = st.sidebar.selectbox("Modalidad (general):", ["Todas"] + mods, index=0)
         if sel_mod != "Todas":
-            df = df[df["modality_general"] == sel_mod]
+            df = df[df["modalidad_general"] == sel_mod]
 
-    if df.empty:
-        st.warning("No hay datos tras filtros (Region, Pais, Modalidad).")
-        return
-
-    # 4) Filtro Montos (value_usd en MILLONES)
+    # 2) Filtro Montos en millones
     if "value_usd" in df.columns:
         df["value_usd_millions"] = df["value_usd"] / 1_000_000
         min_mill = float(df["value_usd_millions"].min())
         max_mill = float(df["value_usd_millions"].max())
 
-        sel_millones = st.sidebar.slider(
+        sel_range = st.sidebar.slider(
             "Rango de Montos (Millones USD):",
             min_value=min_mill,
             max_value=max_mill,
             value=(min_mill, max_mill)
         )
         df = df[
-            (df["value_usd_millions"] >= sel_millones[0]) &
-            (df["value_usd_millions"] <= sel_millones[1])
+            (df["value_usd_millions"] >= sel_range[0]) &
+            (df["value_usd_millions"] <= sel_range[1])
         ]
 
     if df.empty:
-        st.warning("No hay datos tras filtrar por Montos en millones (value_usd).")
+        st.warning("No hay datos tras filtrar por modalidad y/o montos (Flujos Agregados).")
         return
 
-    # 5) Rango de Anos
+    # Filtro Rango de Anos
     min_year = df["transactiondate_isodate"].dt.year.min()
     max_year = df["transactiondate_isodate"].dt.year.max()
 
@@ -447,12 +387,11 @@ def subpagina_flujos_agregados():
         (df["transactiondate_isodate"] >= start_ts) &
         (df["transactiondate_isodate"] <= end_ts)
     ]
-
     if df.empty:
-        st.warning("No hay datos tras filtrar por anos.")
+        st.warning("No hay datos tras filtrar por anos (Flujos Agregados).")
         return
 
-    # 6) Frecuencia
+    # Frecuencia
     freq_opciones = ["Trimestral", "Semestral", "Anual"]
     st.markdown("**Frecuencia**")
     freq_choice = st.selectbox("", freq_opciones, index=2, label_visibility="collapsed")
@@ -467,7 +406,7 @@ def subpagina_flujos_agregados():
         freq_code = "A"
         label_x = "Ano"
 
-    # 7) "Ver por"
+    # "Ver por": [Fechas | Sectores]
     vista_options = ["Fechas", "Sectores"]
     vista = st.radio("Ver por:", vista_options, horizontal=True)
 
@@ -475,7 +414,7 @@ def subpagina_flujos_agregados():
         st.warning("No hay datos tras los filtros (Flujos Agregados).")
         return
 
-    # Paleta invertida con 'Otros' = #4361ee
+    # Paleta invertida (8 colores), 'Otros' = #4361ee
     my_inverted_palette = [
         "#4361ee",
         "#E86D67",
@@ -491,11 +430,13 @@ def subpagina_flujos_agregados():
     # (A) MODO "Fechas"
     # -------------------------------------------------------------------------
     if vista == "Fechas":
+        # Resample segun freq_code
         df.set_index("transactiondate_isodate", inplace=True)
         df_agg = df["value_usd"].resample(freq_code).sum().reset_index()
         df_agg["value_usd_millions"] = df_agg["value_usd"] / 1_000_000
         df.reset_index(inplace=True)
 
+        # Crea "Periodo"
         if freq_choice == "Trimestral":
             df_agg["Periodo"] = (
                 df_agg["transactiondate_isodate"].dt.year.astype(str)
@@ -515,7 +456,7 @@ def subpagina_flujos_agregados():
         st.subheader("Stacked Ordered Bar (Fechas) - 1 Serie")
 
         if df_agg.empty:
-            st.warning("No hay datos en este rango de anos (Fechas).")
+            st.warning("No hay datos en el rango de anos (Fechas).")
             return
 
         fig_bar_time = px.bar(
@@ -543,9 +484,10 @@ def subpagina_flujos_agregados():
     # -------------------------------------------------------------------------
     else:
         if "Sector" not in df.columns:
-            st.warning("No existe la columna 'Sector' en el DF.")
+            st.warning("No existe la columna 'Sector' en el DF de Flujos Agregados.")
             return
 
+        # Calcula Periodo
         if freq_choice == "Trimestral":
             df["Periodo"] = (
                 df["transactiondate_isodate"].dt.year.astype(str)
@@ -572,22 +514,20 @@ def subpagina_flujos_agregados():
         global_sum = global_sum.sort_values("value_usd_millions", ascending=False)
         top_7 = global_sum["Sector"].head(7).tolist()
 
-        df_agg_sec["Sector_stack"] = df_agg_sec["Sector"].apply(
-            lambda s: s if s in top_7 else "Otros"
-        )
+        df_agg_sec["Sector_stack"] = df_agg_sec["Sector"].apply(lambda s: s if s in top_7 else "Otros")
         df_agg_sec = df_agg_sec.groupby(["Periodo", "Sector_stack"], as_index=False)["value_usd_millions"].sum()
 
         st.subheader("Stacked Ordered Bar Chart (Sectores)")
 
         if df_agg_sec.empty:
-            st.warning("No hay datos tras agrupar top 7 + 'Otros'.")
+            st.warning("No hay datos despues de agrupar top 7 + 'Otros'.")
             return
 
-        # Orden alfabético + 'Otros' al final
+        # Orden (alfabetico) + "Otros"
         sorted_top7 = sorted(top_7)
         unique_sectors = sorted_top7 + ["Otros"]
 
-        # 1) Normal
+        # 1) Suma
         fig_bar_normal = px.bar(
             df_agg_sec,
             x="Periodo",
@@ -614,7 +554,7 @@ def subpagina_flujos_agregados():
 
         st.subheader("Percentage Stacked Ordered Bar Chart (Sectores)")
 
-        # 2) Porcentaje (sin data labels)
+        # 2) Porcentaje
         pivoted = df_agg_sec.pivot(index="Periodo", columns="Sector_stack", values="value_usd_millions").fillna(0)
         pivoted_sum = pivoted.sum(axis=1)
         pivoted_pct = pivoted.div(pivoted_sum, axis=0) * 100
@@ -666,23 +606,23 @@ def descriptivo():
 # -----------------------------------------------------------------------------
 def series_temporales():
     st.markdown('<h1 class="title">Series Temporales</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Placeholder.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Placeholder</p>', unsafe_allow_html=True)
 
 def analisis_geoespacial():
     st.markdown('<h1 class="title">Analisis Geoespacial</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Placeholder.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Placeholder</p>', unsafe_allow_html=True)
 
 def multidimensional_y_relaciones():
     st.markdown('<h1 class="title">Multidimensional y Relaciones</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Placeholder.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Placeholder</p>', unsafe_allow_html=True)
 
 def modelos():
     st.markdown('<h1 class="title">Modelos</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Placeholder.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Placeholder</p>', unsafe_allow_html=True)
 
 def analisis_exploratorio():
     st.markdown('<h1 class="title">Analisis Exploratorio</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Placeholder: PyGWalker.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Placeholder: PyGWalker</p>', unsafe_allow_html=True)
 
     st.sidebar.header("Selecciona la BDD para analizar")
     ds = st.sidebar.selectbox("Base de datos:", list(DATASETS.keys()))
