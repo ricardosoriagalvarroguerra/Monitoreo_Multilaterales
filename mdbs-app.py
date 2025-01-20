@@ -551,7 +551,7 @@ def subpagina_flujos_agregados():
             st.plotly_chart(fig_normal, use_container_width=True)
 
         with col2:
-            st.subheader("%")
+            st.subheader("Evolución de aprobaciones %")
             st.plotly_chart(fig_pct, use_container_width=True)
 
     st.info("Flujos agregados: Aprobaciones (Outgoing Commitments).")
