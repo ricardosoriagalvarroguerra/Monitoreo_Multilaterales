@@ -70,9 +70,14 @@ def load_dataframes():
     Lee y devuelve los DataFrames usados en la aplicación.
     Ajusta la ruta/parquet si es necesario.
     """
-    df_activity = pd.read_parquet("activity_iadb.parquet")  # Reemplaza con tu ruta si difiere
+    df_activity = pd.read_parquet("activity_iadb.parquet")  
+    df_outgoing = pd.read_parquet("outgoing_commitment_iadb.parquet")
+    df_disb = pd.read_parquet("disbursements_data.parquet")
+
     datasets = {
-        "ACTIVITY_IADB": df_activity
+        "ACTIVITY_IADB": df_activity,
+        "OUTGOING_COMMITMENT_IADB": df_outgoing,
+        "DISBURSEMENTS_DATA": df_disb
     }
     return datasets
 
@@ -155,7 +160,6 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
         )
         st.plotly_chart(fig_m2, use_container_width=True)
 
-
 def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
     """
     Muestra dos box plots con Top 6 Sectores (en base a 'value_usd'):
@@ -233,6 +237,8 @@ def boxplot_sector(df: pd.DataFrame, titulo_extra: str = ""):
         )
         st.plotly_chart(fig_s2, use_container_width=True)
 
+# -----------------------------------------------------------------------------
+# SUBPÁGINA: EJECUCIÓN
 # -----------------------------------------------------------------------------
 def subpagina_ejecucion():
     """
@@ -373,14 +379,139 @@ def subpagina_ejecucion():
         st.subheader("Box Plots - Sector (Filtrado, Top 6)")
         boxplot_sector(df_box, titulo_extra="(Filtrado)")
 
-def subpagina_flujos_agregados():
-    """Subpágina 'Flujos Agregados' (placeholder)."""
-    st.markdown('<p class="subtitle">Subpágina: Flujos Agregados</p>', unsafe_allow_html=True)
-    st.write("Aquí podrías mostrar métricas o gráficos de flujos totales, aprobaciones vs desembolsos, etc.")
-    st.info("Placeholder: Implementa la lógica que desees para Flujos Agregados.")
 
 # -----------------------------------------------------------------------------
-# PÁGINA "Descriptivo" (DOS SUBPÁGINAS)
+# SUBPÁGINA: FLUJOS AGREGADOS
+# -----------------------------------------------------------------------------
+def subpagina_flujos_agregados():
+    """
+    Subpágina: Flujos Agregados
+      - Filtro de fechas (menú de navegación: barra lateral)
+      - Selección de frecuencia (Trimestral, Semestral, Anual)
+      - Dos gráficos de barras (Aprobaciones vs. Desembolsos) con color #d90429
+    """
+    st.markdown('<p class="subtitle">Subpágina: Flujos Agregados</p>', unsafe_allow_html=True)
+
+    # 1) Cargamos DataFrames
+    df_outgoing = DATASETS["OUTGOING_COMMITMENT_IADB"].copy()
+    df_disb = DATASETS["DISBURSEMENTS_DATA"].copy()
+
+    # Aseguramos formato datetime en transactiondate_isodate
+    if "transactiondate_isodate" in df_outgoing.columns:
+        df_outgoing["transactiondate_isodate"] = pd.to_datetime(df_outgoing["transactiondate_isodate"])
+    if "transactiondate_isodate" in df_disb.columns:
+        df_disb["transactiondate_isodate"] = pd.to_datetime(df_disb["transactiondate_isodate"])
+
+    # 2) Filtro de Fechas en la barra lateral
+    st.sidebar.subheader("Filtro de fechas (Flujos Agregados)")
+    min_date_global = min(df_outgoing["transactiondate_isodate"].min(),
+                          df_disb["transactiondate_isodate"].min())
+    max_date_global = max(df_outgoing["transactiondate_isodate"].max(),
+                          df_disb["transactiondate_isodate"].max())
+
+    fecha_inicio, fecha_fin = st.sidebar.date_input(
+        "Selecciona rango de fechas:",
+        value=[min_date_global, max_date_global],
+        min_value=min_date_global,
+        max_value=max_date_global
+    )
+
+    # Ajuste si se recibe lista
+    if isinstance(fecha_inicio, list):
+        if len(fecha_inicio) == 2:
+            start, end = fecha_inicio
+        else:
+            start, end = fecha_inicio[0], fecha_inicio[0]
+    else:
+        start, end = fecha_inicio, fecha_fin
+
+    # Filtramos
+    df_outgoing_f = df_outgoing[
+        (df_outgoing["transactiondate_isodate"] >= pd.to_datetime(start)) &
+        (df_outgoing["transactiondate_isodate"] <= pd.to_datetime(end))
+    ].copy()
+
+    df_disb_f = df_disb[
+        (df_disb["transactiondate_isodate"] >= pd.to_datetime(start)) &
+        (df_disb["transactiondate_isodate"] <= pd.to_datetime(end))
+    ].copy()
+
+    # 3) Selección de Frecuencia (Trimestral, Semestral, Anual)
+    freq_opciones = ["Trimestral", "Semestral", "Anual"]
+    st.markdown("##### Frecuencia de agregación:")
+    freq_choice = st.selectbox("", freq_opciones, index=0)
+
+    if freq_choice == "Trimestral":
+        freq_code = "Q"   # Resample trimestral
+    elif freq_choice == "Semestral":
+        freq_code = "6M"  # Resample cada 6 meses
+    else:  # Anual
+        freq_code = "A"   # Resample anual
+
+    # 4) Agrupamos/Resample
+    df_outgoing_f.set_index("transactiondate_isodate", inplace=True)
+    df_agg_outgoing = df_outgoing_f["value_usd"].resample(freq_code).sum().reset_index()
+
+    df_disb_f.set_index("transactiondate_isodate", inplace=True)
+    df_agg_disb = df_disb_f["value_usd"].resample(freq_code).sum().reset_index()
+
+    # 5) Dibujamos los gráficos de barras en dos columnas
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Aprobaciones")
+        if df_agg_outgoing.empty:
+            st.warning("No hay datos de Aprobaciones en el rango de fechas seleccionado.")
+        else:
+            fig_aprob = px.bar(
+                df_agg_outgoing,
+                x="transactiondate_isodate",
+                y="value_usd",
+                color_discrete_sequence=["#d90429"],
+                labels={
+                    "transactiondate_isodate": "Fecha",
+                    "value_usd": "Monto (USD)"
+                },
+                title=""
+            )
+            fig_aprob.update_layout(
+                font_color="#FFFFFF",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=False)
+            )
+            st.plotly_chart(fig_aprob, use_container_width=True)
+
+    with col2:
+        st.subheader("Desembolsos")
+        if df_agg_disb.empty:
+            st.warning("No hay datos de Desembolsos en el rango de fechas seleccionado.")
+        else:
+            fig_desb = px.bar(
+                df_agg_disb,
+                x="transactiondate_isodate",
+                y="value_usd",
+                color_discrete_sequence=["#d90429"],
+                labels={
+                    "transactiondate_isodate": "Fecha",
+                    "value_usd": "Monto (USD)"
+                },
+                title=""
+            )
+            fig_desb.update_layout(
+                font_color="#FFFFFF",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=False)
+            )
+            st.plotly_chart(fig_desb, use_container_width=True)
+
+    st.info("Gráficos de flujos agregados: Aprobaciones (Outgoing Commitments) vs Desembolsos.")
+
+# -----------------------------------------------------------------------------
+# PÁGINA "Descriptivo" (Dos SUBPÁGINAS)
 # -----------------------------------------------------------------------------
 def descriptivo():
     st.markdown('<h1 class="title">Descriptivo</h1>', unsafe_allow_html=True)
@@ -399,20 +530,23 @@ def descriptivo():
 # -----------------------------------------------------------------------------
 def series_temporales():
     st.markdown('<h1 class="title">Series Temporales</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Explora la evolución de los datos a lo largo del tiempo.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Explora la evolución de los datos a lo largo del tiempo (Placeholder).</p>', unsafe_allow_html=True)
 
 def analisis_geoespacial():
     st.markdown('<h1 class="title">Análisis Geoespacial</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Visualiza datos en el mapa, distribuciones geográficas, etc.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Visualiza datos en el mapa, distribuciones geográficas, etc. (Placeholder)</p>', unsafe_allow_html=True)
 
 def multidimensional_y_relaciones():
     st.markdown('<h1 class="title">Multidimensional y Relaciones</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Análisis de relaciones entre variables, correlaciones, PCA, clustering, etc.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Análisis de relaciones entre variables, correlaciones, PCA, clustering, etc. (Placeholder)</p>', unsafe_allow_html=True)
 
 def modelos():
     st.markdown('<h1 class="title">Modelos</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Entrena y evalúa modelos predictivos o de clasificación.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Entrena y evalúa modelos predictivos o de clasificación (Placeholder).</p>', unsafe_allow_html=True)
 
+# -----------------------------------------------------------------------------
+# PÁGINA "Análisis Exploratorio" (PyGWalker)
+# -----------------------------------------------------------------------------
 def analisis_exploratorio():
     st.markdown('<h1 class="title">Análisis Exploratorio</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Explora datos con PyGWalker (alto rendimiento).</p>', unsafe_allow_html=True)
