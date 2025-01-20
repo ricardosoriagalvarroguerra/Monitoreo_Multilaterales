@@ -525,13 +525,11 @@ def subpagina_flujos_agregados():
         else:
             df["Periodo"] = df["transactiondate_isodate"].dt.year.astype(str)
 
-        # 2) Agrupacion en montos absolutos
         df_agg_sec = df.groupby(["Periodo", "Sector"], as_index=False)["value_usd_millions"].sum()
         if df_agg_sec.empty:
             st.warning("No hay datos en estos filtros (Sectores).")
             return
 
-        # 3) Top 7 + OTROS
         top_agg = df_agg_sec.groupby("Sector", as_index=False)["value_usd_millions"].sum()
         top_agg = top_agg.sort_values("value_usd_millions", ascending=False)
         top_7 = top_agg["Sector"].head(7).tolist()
@@ -543,39 +541,33 @@ def subpagina_flujos_agregados():
             st.warning("No hay datos después de agrupar top 7 + 'OTROS'.")
             return
 
-        # 4) Preparamos dataset para la parte porcentual
         pivoted = df_agg_sec.pivot(index="Periodo", columns="Sector_stack", values="value_usd_millions").fillna(0)
         sums = pivoted.sum(axis=1)
         pivot_pct = pivoted.div(sums, axis=0) * 100
-        # Volvemos a "melt"
         df_pct = pivot_pct.reset_index().melt(id_vars="Periodo", var_name="Sector_stack", value_name="pct_value")
 
-        # 5) Lista ordenada de sectores
         sorted_top7 = sorted(top_7)
         unique_sectors = sorted_top7 + ["OTROS"]
 
-        # 6) Mapeamos cada sector a un color fijo en 'color_palette'
         color_map = {}
         for i, sector_n in enumerate(unique_sectors):
             color_map[sector_n] = color_palette[i % len(color_palette)]
 
-        # ----------------------------------------------------------------------------
-        # UNA SOLA FIGURA con SUBPLOTS (arriba-abajo), con +espacio vertical
-        # ----------------------------------------------------------------------------
         fig_subplots = make_subplots(
             rows=2, cols=1,
             shared_xaxes=True,
-            vertical_spacing=0.15,  # <--- Espacio vertical aumentado
+            vertical_spacing=0.15,  # Espacio vertical entre subplots
             subplot_titles=(
                 "Evolución de aprobaciones (Millones USD)",
                 "Evolución de aprobaciones (%)"
             )
         )
+        # AUMENTANDO LA ALTURA para que sea más largo
+        fig_subplots.update_layout(
+            height=800  # <--- Control de altura (ajusta según prefieras)
+        )
 
-        # Preparamos la lista de periodos en orden
-        # (opcional, ya que iremos pescando en cada sector)
-
-        # BARRAS (abs) en row=1
+        # BARRAS (abs)
         for sector_n in unique_sectors:
             df_temp_abs = df_agg_sec[df_agg_sec["Sector_stack"] == sector_n]
             x_vals = df_temp_abs["Periodo"]
@@ -593,7 +585,7 @@ def subpagina_flujos_agregados():
                 row=1, col=1
             )
 
-        # BARRAS (% ) en row=2
+        # BARRAS (%)
         for sector_n in unique_sectors:
             df_temp_pct = df_pct[df_pct["Sector_stack"] == sector_n]
             x_vals = df_temp_pct["Periodo"]
@@ -619,8 +611,7 @@ def subpagina_flujos_agregados():
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
-                # y=1.02 -> incrementamos un poco
-                y=1.08,  # <-- Subimos la leyenda más lejos del título
+                y=1.08,        # Separación mayor de los títulos
                 xanchor="center",
                 x=0.5
             )
@@ -647,13 +638,11 @@ def subpagina_flujos_agregados():
         (df_global_all["transactiondate_isodate"] <= end_ts)
     ]
 
-    # dataset de la región
     if sel_region != "Todas":
         df_region_all = df_global_all[df_global_all["region"] == sel_region].copy()
     else:
         df_region_all = pd.DataFrame()
 
-    # dataset de países
     list_countries_data_all = []
     if sel_region != "Todas" and ("Todas" not in sel_paises):
         for c in sel_paises:
