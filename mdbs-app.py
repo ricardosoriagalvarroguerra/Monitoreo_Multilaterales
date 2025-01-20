@@ -55,10 +55,6 @@ st.markdown(
 # -----------------------------------------------------------------------------
 @st.cache_data
 def load_dataframes():
-    """
-    Lee y devuelve los DataFrames usados en la aplicación.
-    Ajusta la ruta/parquet si es necesario.
-    """
     df_activity = pd.read_parquet("activity_iadb.parquet")  
     df_outgoing = pd.read_parquet("outgoing_commitment_iadb.parquet")
     df_disb = pd.read_parquet("disbursements_data.parquet")
@@ -335,20 +331,18 @@ def subpagina_ejecucion():
         boxplot_sector(df_box, titulo_extra="(Filtrado)")
 
 # -----------------------------------------------------------------------------
-# SUBPÁGINA: FLUJOS AGREGADOS
+# SUBPÁGINA: FLUJOS AGREGADOS (Con cambios finales)
 # -----------------------------------------------------------------------------
 def subpagina_flujos_agregados():
     """
     Subpágina: Flujos Agregados
       - Filtros: Región->País (con 'Todas'), Modalidad, Frecuencia
-      - "Ver por": [Fechas | Sectores]
-        -> Fechas: bar chart vs tiempo color #c9182c
-        -> Sectores: stacked bar chart vs tiempo
-           * Top 7 + 'Otros'
-           * Paleta con 8 colores, pero cambiando:
-               - #E1E2E1 por #FFFFFF
-               - El último #FFFFFF por #8A84C6
-           * Borde blanco, barras pegadas
+      - 'Ver por': [Fechas | Sectores]
+        -> Fechas: color #c9182c
+        -> Sectores: stacked bar con Top 7 + 'Otros'
+           - Invertir orden de colores
+           - 'Otros' = #4361ee
+           - Borde blanco, barras pegadas
     """
     st.markdown('<p class="subtitle">Subpágina: Flujos Agregados</p>', unsafe_allow_html=True)
 
@@ -364,18 +358,17 @@ def subpagina_flujos_agregados():
         if sel_region != "Todas":
             df = df[df["region"] == sel_region]
 
-    # Filtro de País (multiselect con "Todas")
+    # Filtro de País (multiselect con 'Todas')
     if "recipientcountry_codename" in df.columns:
         pais_list = sorted(df["recipientcountry_codename"].dropna().unique().tolist())
-        all_opciones = ["Todas"] + pais_list
-        sel_paises = st.sidebar.multiselect("País(es):", all_opciones, default=["Todas"])
-
-        # Si "Todas" está en la selección, no filtramos por país
+        opciones_paises = ["Todas"] + pais_list
+        sel_paises = st.sidebar.multiselect("País(es):", opciones_paises, default=["Todas"])
+        
+        # Si 'Todas' está en la selección, no filtramos por país
         if "Todas" not in sel_paises:
-            if sel_paises:  # si no está vacío
+            if sel_paises:  # no vacío
                 df = df[df["recipientcountry_codename"].isin(sel_paises)]
             else:
-                # Si no se seleccionó nada, no habría datos
                 st.warning("No se ha seleccionado ningún país.")
                 return
 
@@ -388,7 +381,7 @@ def subpagina_flujos_agregados():
 
     # Verificamos datos
     if df.empty:
-        st.warning("No hay datos tras aplicar los filtros anteriores.")
+        st.warning("No hay datos tras estos filtros.")
         return
 
     # Filtro de Años
@@ -429,33 +422,31 @@ def subpagina_flujos_agregados():
         label_x = "Año"
 
     # "Ver por": Fechas o Sectores
-    vista_options = ["Fechas", "Sectores"]
-    vista = st.radio("Ver por:", vista_options, horizontal=True)
+    vista_opts = ["Fechas", "Sectores"]
+    vista = st.radio("Ver por:", vista_opts, horizontal=True)
 
     if df.empty:
-        st.warning("No hay datos tras los filtros aplicados.")
+        st.warning("No hay datos tras estos filtros.")
         return
 
-    # Convertir a millones
+    # Convertimos a millones
     df["value_usd_millions"] = df["value_usd"] / 1_000_000
 
-    # Paleta con 8 colores; 
-    #  - gris claro (#E1E2E1) => #FFFFFF
-    #  - el último que era #FFFFFF => #8A84C6
-    #  => repetimos #8A84C6 si es necesario
-    my_palette = [
-       "#E86D67",  # 1
-       "#FFFFFF",  # 2 (sustituyendo #E1E2E1)
-       "#59C3C3",  # 3
-       "#8A84C6",  # 4
-       "#FBD48A",  # 5
-       "#B4B3B6",  # 6
-       "#22223B",  # 7
-       "#8A84C6"   # 8 (sustituyendo el blanco final)
+    # Paleta 'invertida', con 8 colores; el último (#4361ee) es para 'Otros'
+    # (ej. invertimos la paleta anterior, y reasignamos 'Otros' -> #4361ee)
+    my_inverted_palette = [
+        "#8A84C6",  # color 1
+        "#22223B", # color 2
+        "#B4B3B6", # color 3
+        "#FBD48A", # color 4
+        "#59C3C3", # color 5
+        "#FFFFFF", # color 6
+        "#E86D67", # color 7
+        "#4361ee"  # color 8 => 'Otros'
     ]
 
     # -------------------------------------------------------------------------
-    # MODO "FECHAS": un solo color #c9182c
+    # (A) MODO "Fechas" -> un solo color #c9182c
     # -------------------------------------------------------------------------
     if vista == "Fechas":
         df.set_index("transactiondate_isodate", inplace=True)
@@ -489,7 +480,7 @@ def subpagina_flujos_agregados():
             df_agg,
             x="Periodo",
             y="value_usd_millions",
-            color_discrete_sequence=["#c9182c"],  
+            color_discrete_sequence=["#c9182c"],
             labels={
                 "Periodo": label_x,
                 "value_usd_millions": "Monto (Millones USD)"
@@ -508,14 +499,13 @@ def subpagina_flujos_agregados():
         st.plotly_chart(fig_time, use_container_width=True)
 
     # -------------------------------------------------------------------------
-    # MODO "SECTORES": stacked bar Top 7 + "Otros", con la nueva paleta
+    # (B) MODO "Sectores" -> stacked bar con Top 7 + "Otros"
     # -------------------------------------------------------------------------
     else:
         if "Sector" not in df.columns:
-            st.warning("No existe la columna 'Sector' en el DF.")
+            st.warning("No existe la columna 'Sector'.")
             return
 
-        # Creamos 'Periodo'
         if freq_choice == "Trimestral":
             df["Periodo"] = (
                 df["transactiondate_isodate"].dt.year.astype(str)
@@ -537,27 +527,28 @@ def subpagina_flujos_agregados():
             .sum()
         )
         if df_agg_sec.empty:
-            st.warning("No hay datos de Aprobaciones para esta vista de Sectores.")
+            st.warning("No hay datos de Aprobaciones en estos filtros.")
             return
 
         # Top 7
-        sum_global = df_agg_sec.groupby("Sector", as_index=False)["value_usd_millions"].sum()
-        sum_global = sum_global.sort_values("value_usd_millions", ascending=False)
-        top_7 = sum_global["Sector"].head(7).tolist()
+        global_sum = df_agg_sec.groupby("Sector", as_index=False)["value_usd_millions"].sum()
+        global_sum = global_sum.sort_values("value_usd_millions", ascending=False)
+        top_7 = global_sum["Sector"].head(7).tolist()
 
+        # Reemplazamos no-top7 por "Otros"
         df_agg_sec["Sector_stack"] = df_agg_sec["Sector"].apply(
             lambda s: s if s in top_7 else "Otros"
         )
-        # Agrupamos para "Otros"
+        # Re-agrupamos
         df_agg_sec = df_agg_sec.groupby(["Periodo", "Sector_stack"], as_index=False)["value_usd_millions"].sum()
 
         st.subheader("Aprobaciones Apiladas por Sector (Top 7 + Otros)")
 
         if df_agg_sec.empty:
-            st.warning("No hay datos luego de agrupar top 7 + Otros.")
+            st.warning("No hay datos tras agrupar top 7 + Otros.")
             return
 
-        # Orden alfabético + 'Otros' final
+        # Orden alfabético + "Otros" final
         sorted_top7 = sorted(top_7)
         unique_sectors = sorted_top7 + ["Otros"]
 
@@ -568,7 +559,7 @@ def subpagina_flujos_agregados():
             color="Sector_stack",
             barmode="stack",
             category_orders={"Sector_stack": unique_sectors},
-            color_discrete_sequence=my_palette,
+            color_discrete_sequence=my_inverted_palette,  # invertida, 'Otros' = #4361ee
             labels={
                 "Periodo": label_x,
                 "Sector_stack": "Sector",
@@ -608,27 +599,27 @@ def descriptivo():
         subpagina_flujos_agregados()
 
 # -----------------------------------------------------------------------------
-# OTRAS PÁGINAS (Placeholder)
+# OTRAS PÁGINAS (Placeholders)
 # -----------------------------------------------------------------------------
 def series_temporales():
     st.markdown('<h1 class="title">Series Temporales</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Placeholder: evolución a lo largo del tiempo</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Placeholder.</p>', unsafe_allow_html=True)
 
 def analisis_geoespacial():
     st.markdown('<h1 class="title">Análisis Geoespacial</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Placeholder: datos en mapas</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Placeholder.</p>', unsafe_allow_html=True)
 
 def multidimensional_y_relaciones():
     st.markdown('<h1 class="title">Multidimensional y Relaciones</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Placeholder: correlaciones, PCA, clustering</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Placeholder.</p>', unsafe_allow_html=True)
 
 def modelos():
     st.markdown('<h1 class="title">Modelos</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Placeholder: entrena/evalúa modelos</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Placeholder.</p>', unsafe_allow_html=True)
 
 def analisis_exploratorio():
     st.markdown('<h1 class="title">Análisis Exploratorio</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Placeholder: PyGWalker</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Placeholder: PyGWalker.</p>', unsafe_allow_html=True)
 
     st.sidebar.header("Selecciona la BDD para analizar")
     ds = st.sidebar.selectbox("Base de datos:", list(DATASETS.keys()))
