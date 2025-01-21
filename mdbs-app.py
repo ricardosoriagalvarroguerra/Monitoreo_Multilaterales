@@ -176,6 +176,7 @@ def subpagina_ejecucion():
     - Único gráfico: “Planificación Vs Ejecución”.
     - Filtro interno para activitystatus_codename en ["Closed", "Finalisation"].
     - Filtro de Sector_1 con multiselect (cada sector seleccionado se colorea distinto; 'Otros' para el resto).
+    - Agregar en tooltip la variable activitystatus_codename.
     """
     st.markdown('<p class="subtitle">Subpagina: Ejecucion</p>', unsafe_allow_html=True)
 
@@ -247,7 +248,8 @@ def subpagina_ejecucion():
 
     # Scatter “Planificacion Vs Ejecucion”
     st.subheader("Planificacion Vs Ejecucion")
-    needed_cols = {"duracion_estimada", "duracion_real", "sector_color"}
+    needed_cols = {"duracion_estimada", "duracion_real", "sector_color", "activitystatus_codename"}
+    # Verificamos columnas con subset
     if needed_cols.issubset(df_ejec.columns):
         df_scat = df_ejec[
             df_ejec["duracion_estimada"].notna() &
@@ -261,6 +263,7 @@ def subpagina_ejecucion():
                 x="duracion_estimada",
                 y="duracion_real",
                 color="sector_color",  # <--- color por sector_color
+                hover_data=["activitystatus_codename"],  # <--- Se agrega la variable en el tooltip
                 labels={
                     "duracion_estimada": "Duracion Est. (años)",
                     "duracion_real": "Duracion Real (años)",
