@@ -84,6 +84,10 @@ def get_pyg_renderer_by_name(dataset_name: str):
 # FUNCIONES AUXILIARES
 # -----------------------------------------------------------------------------
 def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
+    """
+    (NOTA: Ya no se usa en subpagina_ejecucion, pero se mantiene por si deseas 
+    usarlo en otros lugares o en subpagina_flujos_agregados u otras partes.)
+    """
     needed_cols_1 = {"modalidad_general", "duracion_estimada"}
     needed_cols_2 = {"modalidad_general", "completion_delay_years"}
 
@@ -168,10 +172,9 @@ def compute_yoy(df: pd.DataFrame, date_col: str, value_col: str, freq_code: str,
 # -----------------------------------------------------------------------------
 def subpagina_ejecucion():
     """
-    - Filtros de región, país, sector, modalidad.
-    - Scatter “Aprobaciones Vs Ejecución”: size en función de value_usd.
-    - Scatter “Planificación Vs Ejecución” (+ línea diagonal 45°).
-    - Boxplots de duración y atraso según modalidad.
+    - Se eliminó el Scatter “Aprobaciones Vs Ejecución” y los boxplots de modalidad.
+    - Único gráfico: “Planificación Vs Ejecución”.
+    - Filtro interno: Solo se toman en cuenta las filas con activitystatus_codename en ["Closed", "Finalisation"].
     """
     st.markdown('<p class="subtitle">Subpagina: Ejecucion</p>', unsafe_allow_html=True)
 
@@ -218,87 +221,54 @@ def subpagina_ejecucion():
         st.warning("No hay datos tras los filtros (Ejecucion).")
         return
 
-    colA, colB = st.columns(2)
+    # Filtro interno: activitystatus_codename en ["Closed", "Finalisation"]
+    if "activitystatus_codename" in df_ejec.columns:
+        df_ejec = df_ejec[df_ejec["activitystatus_codename"].isin(["Closed", "Finalisation"])]
+        if df_ejec.empty:
+            st.warning("No hay datos con activitystatus_codename = 'Closed' o 'Finalisation'.")
+            return
+    else:
+        st.warning("No se encontró la columna 'activitystatus_codename'.")
+        return
 
-    # Scatter 1: "Aprobaciones Vs Ejecucion"
-    with colA:
-        st.subheader("Aprobaciones Vs Ejecucion")
-        needed_1 = {"duracion_estimada", "completion_delay_years", "value_usd"}
-        if needed_1.issubset(df_ejec.columns):
-            df_scat1 = df_ejec[
-                df_ejec["duracion_estimada"].notna() &
-                df_ejec["completion_delay_years"].notna() &
-                df_ejec["value_usd"].notna()
-            ]
-            if df_scat1.empty:
-                st.warning("No hay datos en 'Aprobaciones Vs Ejecucion'.")
-            else:
-                fig1 = px.scatter(
-                    df_scat1,
-                    x="duracion_estimada",
-                    y="completion_delay_years",
-                    size="value_usd",
-                    size_max=40,
-                    color_discrete_sequence=["#00b4d8"],
-                    labels={
-                        "duracion_estimada": "Duracion Est. (años)",
-                        "completion_delay_years": "Atraso (años)",
-                        "value_usd": "Valor (USD)"
-                    }
-                )
-                fig1.update_layout(
-                    title="",
-                    font_color="#FFFFFF",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)"
-                )
-                st.plotly_chart(fig1, use_container_width=True)
+    # Scatter “Planificacion Vs Ejecucion”
+    st.subheader("Planificacion Vs Ejecucion")
+    needed_2 = {"duracion_estimada", "duracion_real"}
+    if needed_2.issubset(df_ejec.columns):
+        df_scat2 = df_ejec[
+            df_ejec["duracion_estimada"].notna() &
+            df_ejec["duracion_real"].notna()
+        ]
+        if df_scat2.empty:
+            st.warning("No hay datos en 'Planificacion Vs Ejecucion'.")
         else:
-            st.warning(f"Faltan columnas en DataFrame: {needed_1 - set(df_ejec.columns)}")
+            fig2 = px.scatter(
+                df_scat2,
+                x="duracion_estimada",
+                y="duracion_real",
+                color_discrete_sequence=["#00b4d8"],
+                labels={
+                    "duracion_estimada": "Duracion Est. (años)",
+                    "duracion_real": "Duracion Real (años)"
+                }
+            )
+            # Línea diagonal 45°
+            max_val = max(df_scat2["duracion_estimada"].max(), df_scat2["duracion_real"].max())
+            fig2.add_shape(
+                type="line",
+                x0=0, y0=0, x1=max_val, y1=max_val,
+                line=dict(color="white", dash="dot")
+            )
+            fig2.update_layout(
+                title="",
+                font_color="#FFFFFF",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)"
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+    else:
+        st.warning(f"Faltan columnas en DataFrame: {needed_2 - set(df_ejec.columns)}")
 
-    # Scatter 2: "Planificacion Vs Ejecucion"
-    with colB:
-        st.subheader("Planificacion Vs Ejecucion")
-        needed_2 = {"duracion_estimada", "duracion_real"}
-        if needed_2.issubset(df_ejec.columns):
-            df_scat2 = df_ejec[
-                df_ejec["duracion_estimada"].notna() &
-                df_ejec["duracion_real"].notna()
-            ]
-            if df_scat2.empty:
-                st.warning("No hay datos en 'Planificacion Vs Ejecucion'.")
-            else:
-                fig2 = px.scatter(
-                    df_scat2,
-                    x="duracion_estimada",
-                    y="duracion_real",
-                    color_discrete_sequence=["#00b4d8"],
-                    labels={
-                        "duracion_estimada": "Duracion Est. (años)",
-                        "duracion_real": "Duracion Real (años)"
-                    }
-                )
-                # Línea diagonal 45°
-                max_val = max(df_scat2["duracion_estimada"].max(), df_scat2["duracion_real"].max())
-                fig2.add_shape(
-                    type="line",
-                    x0=0, y0=0, x1=max_val, y1=max_val,
-                    line=dict(color="white", dash="dot")
-                )
-                fig2.update_layout(
-                    title="",
-                    font_color="#FFFFFF",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)"
-                )
-                st.plotly_chart(fig2, use_container_width=True)
-        else:
-            st.warning(f"Faltan columnas en DataFrame: {needed_2 - set(df_ejec.columns)}")
-
-    st.markdown("---")
-    st.markdown("### Box Plots (Modalidad) - Filtrados")
-
-    boxplot_modalidad(df_ejec, titulo_extra="(Ejecucion)")
 
 # -----------------------------------------------------------------------------
 # SUBPAGINA FLUJOS AGREGADOS (OUTGOING_COMMITMENT_IADB)
@@ -556,15 +526,14 @@ def subpagina_flujos_agregados():
         fig_subplots = make_subplots(
             rows=2, cols=1,
             shared_xaxes=True,
-            vertical_spacing=0.15,  # Espacio vertical entre subplots
+            vertical_spacing=0.15,
             subplot_titles=(
                 "Evolución de aprobaciones (Millones USD)",
                 "Evolución de aprobaciones (%)"
             )
         )
-        # AUMENTANDO LA ALTURA para que sea más largo
         fig_subplots.update_layout(
-            height=800  # <--- Control de altura (ajusta según prefieras)
+            height=800  # Ajusta altura si deseas
         )
 
         # BARRAS (abs)
@@ -611,7 +580,7 @@ def subpagina_flujos_agregados():
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
-                y=1.08,        # Separación mayor de los títulos
+                y=1.08,
                 xanchor="center",
                 x=0.5
             )
