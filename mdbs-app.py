@@ -58,7 +58,7 @@ st.markdown(
 # -----------------------------------------------------------------------------
 @st.cache_data
 def load_dataframes():
-    # Ajusta las rutas de tus parquet
+    # Ajusta las rutas de tus parquet según corresponda
     df_activity = pd.read_parquet("activity_iadb.parquet")
     df_outgoing = pd.read_parquet("outgoing_commitment_iadb.parquet")
     df_disb = pd.read_parquet("disbursements_data.parquet")
@@ -85,8 +85,8 @@ def get_pyg_renderer_by_name(dataset_name: str):
 # -----------------------------------------------------------------------------
 def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
     """
-    (NOTA: Ya no se usa en subpagina_ejecucion, pero se mantiene por si deseas 
-    usarlo en otros lugares o en subpagina_flujos_agregados u otras partes.)
+    Esta función ya no se usa en la subpágina 'Ejecución' 
+    pero se mantiene por si deseas reutilizarla en otro lugar.
     """
     needed_cols_1 = {"modalidad_general", "duracion_estimada"}
     needed_cols_2 = {"modalidad_general", "completion_delay_years"}
@@ -172,9 +172,10 @@ def compute_yoy(df: pd.DataFrame, date_col: str, value_col: str, freq_code: str,
 # -----------------------------------------------------------------------------
 def subpagina_ejecucion():
     """
-    - Se eliminó el Scatter “Aprobaciones Vs Ejecución” y los boxplots de modalidad.
+    - Se elimina el Scatter “Aprobaciones Vs Ejecución” y los boxplots.
     - Único gráfico: “Planificación Vs Ejecución”.
-    - Filtro interno: Solo se toman en cuenta las filas con activitystatus_codename en ["Closed", "Finalisation"].
+    - Filtro interno para activitystatus_codename en ["Closed", "Finalisation"].
+    - Filtro de Sector_1 con multiselect (cada sector seleccionado se colorea distinto; 'Otros' para el resto).
     """
     st.markdown('<p class="subtitle">Subpagina: Ejecucion</p>', unsafe_allow_html=True)
 
@@ -201,13 +202,26 @@ def subpagina_ejecucion():
                 st.warning("No se seleccionó ningún país.")
                 return
 
-    # --- Filtro Sector_1 ---
+    # --- Filtro Sector_1 (MULTISELECT) ---
     if "Sector_1" in df_ejec.columns:
-        sec_list = sorted(df_ejec["Sector_1"].dropna().unique().tolist())
-        opt_sec = ["General"] + sec_list
-        sel_sec = st.sidebar.selectbox("Sector_1:", opt_sec, index=0)
-        if sel_sec != "General":
-            df_ejec = df_ejec[df_ejec["Sector_1"] == sel_sec]
+        sector_list = sorted(df_ejec["Sector_1"].dropna().unique().tolist())
+        st.sidebar.markdown("**Selecciona uno o varios sectores:**")
+        sel_sectors = st.sidebar.multiselect("Sector_1:", sector_list, default=[])
+        # En lugar de filtrar, asignamos color
+        if len(sector_list) > 0:
+            if sel_sectors:
+                # Cada sector seleccionado conserva su nombre, el resto será 'Otros'
+                df_ejec["sector_color"] = df_ejec["Sector_1"].apply(
+                    lambda x: x if x in sel_sectors else "Otros"
+                )
+            else:
+                # Si no se selecciona ninguno, todo se considera 'Otros'
+                df_ejec["sector_color"] = "Otros"
+        else:
+            df_ejec["sector_color"] = "Otros"
+    else:
+        # Si no existe la columna 'Sector_1'
+        df_ejec["sector_color"] = "Otros"
 
     # --- Filtro modalidad_general ---
     if "modalidad_general" in df_ejec.columns:
@@ -233,41 +247,42 @@ def subpagina_ejecucion():
 
     # Scatter “Planificacion Vs Ejecucion”
     st.subheader("Planificacion Vs Ejecucion")
-    needed_2 = {"duracion_estimada", "duracion_real"}
-    if needed_2.issubset(df_ejec.columns):
-        df_scat2 = df_ejec[
+    needed_cols = {"duracion_estimada", "duracion_real", "sector_color"}
+    if needed_cols.issubset(df_ejec.columns):
+        df_scat = df_ejec[
             df_ejec["duracion_estimada"].notna() &
             df_ejec["duracion_real"].notna()
         ]
-        if df_scat2.empty:
-            st.warning("No hay datos en 'Planificacion Vs Ejecucion'.")
+        if df_scat.empty:
+            st.warning("No hay datos válidos en 'Planificacion Vs Ejecucion' tras filtrar nulos.")
         else:
-            fig2 = px.scatter(
-                df_scat2,
+            fig = px.scatter(
+                df_scat,
                 x="duracion_estimada",
                 y="duracion_real",
-                color_discrete_sequence=["#00b4d8"],
+                color="sector_color",  # <--- color por sector_color
                 labels={
                     "duracion_estimada": "Duracion Est. (años)",
-                    "duracion_real": "Duracion Real (años)"
+                    "duracion_real": "Duracion Real (años)",
+                    "sector_color": "Sector"
                 }
             )
             # Línea diagonal 45°
-            max_val = max(df_scat2["duracion_estimada"].max(), df_scat2["duracion_real"].max())
-            fig2.add_shape(
+            max_val = max(df_scat["duracion_estimada"].max(), df_scat["duracion_real"].max())
+            fig.add_shape(
                 type="line",
                 x0=0, y0=0, x1=max_val, y1=max_val,
                 line=dict(color="white", dash="dot")
             )
-            fig2.update_layout(
+            fig.update_layout(
                 title="",
                 font_color="#FFFFFF",
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)"
             )
-            st.plotly_chart(fig2, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True)
     else:
-        st.warning(f"Faltan columnas en DataFrame: {needed_2 - set(df_ejec.columns)}")
+        st.warning(f"Faltan columnas en DataFrame: {needed_cols - set(df_ejec.columns)}")
 
 
 # -----------------------------------------------------------------------------
@@ -411,7 +426,7 @@ def subpagina_flujos_agregados():
         st.warning("No hay datos tras los filtros en Flujos Agregados.")
         return
 
-    # Paleta de colores
+    # Paleta de colores para uso posterior
     color_palette = [
         "#4361ee",
         "#E86D67",
@@ -693,6 +708,7 @@ def subpagina_flujos_agregados():
         st.plotly_chart(fig_yoy_all, use_container_width=True)
     else:
         st.warning("No se pudo calcular Tasa de Crecimiento Interanual con los filtros actuales.")
+
 
 # -----------------------------------------------------------------------------
 # PAGINA DESCRIPTIVO (DOS SUBPAGINAS)
