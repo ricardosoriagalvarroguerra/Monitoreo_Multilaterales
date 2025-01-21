@@ -176,7 +176,11 @@ def subpagina_ejecucion():
     - Único gráfico: “Planificación Vs Ejecución”.
     - Filtro interno para activitystatus_codename en ["Closed", "Finalisation"].
     - Filtro de Sector_1 con multiselect (cada sector seleccionado se colorea distinto; 'Otros' para el resto).
-    - Agregar en tooltip la variable activitystatus_codename.
+    - Mostrar en tooltip la variable activitystatus_codename.
+    - Filtros: 
+      1) Region (con opción especial "5-FP"), 
+      2) País (single select), 
+      3) Sector (multiselect para colorear).
     """
     st.markdown('<p class="subtitle">Subpagina: Ejecucion</p>', unsafe_allow_html=True)
 
@@ -184,26 +188,59 @@ def subpagina_ejecucion():
 
     st.sidebar.subheader("Filtros (Ejecucion)")
 
-    # --- Filtro Region ---
-    if "region" in df_ejec.columns:
-        regiones = sorted(df_ejec["region"].dropna().unique().tolist())
-        sel_region = st.sidebar.selectbox("Region:", ["Todas"] + regiones, index=0)
-        if sel_region != "Todas":
-            df_ejec = df_ejec[df_ejec["region"] == sel_region]
+    # -----------------------------
+    # 1) Filtro Region
+    # -----------------------------
+    custom_5fp_countries = ["Argentina", "Bolivia (Plurinational State of)", "Brazil", "Paraguay", "Uruguay"]
 
-    # --- Filtro País ---
-    if "recipientcountry_codename" in df_ejec.columns:
-        pais_list = sorted(df_ejec["recipientcountry_codename"].dropna().unique().tolist())
-        opt_paises = ["Todas"] + pais_list
-        sel_paises = st.sidebar.multiselect("Pais(es):", opt_paises, default=["Todas"])
-        if "Todas" not in sel_paises:
-            if sel_paises:
-                df_ejec = df_ejec[df_ejec["recipientcountry_codename"].isin(sel_paises)]
-            else:
-                st.warning("No se seleccionó ningún país.")
+    if "region" in df_ejec.columns:
+        # Obtenemos las regiones reales existentes
+        real_regions = sorted(df_ejec["region"].dropna().unique().tolist())
+        # Insertamos "5-FP" como región adicional (solo si no existe ya en la lista)
+        if "5-FP" not in real_regions:
+            real_regions.insert(0, "5-FP")
+
+        sel_region = st.sidebar.selectbox(
+            "Region:",
+            ["Todas"] + real_regions,
+            index=0
+        )
+
+        if sel_region == "5-FP":
+            # Para la región "5-FP", filtramos el DF a esos 5 países
+            df_ejec = df_ejec[df_ejec["recipientcountry_codename"].isin(custom_5fp_countries)]
+            # Si después de filtrar no hay datos, avisamos
+            if df_ejec.empty:
+                st.warning("No hay datos que correspondan a la región 5-FP.")
+                return
+        elif sel_region == "Todas":
+            pass  # No filtramos nada
+        else:
+            # Filtramos la región "normal"
+            df_ejec = df_ejec[df_ejec["region"] == sel_region]
+            if df_ejec.empty:
+                st.warning("No hay datos tras filtrar por esta región.")
                 return
 
-    # --- Filtro Sector_1 (MULTISELECT) ---
+    # -----------------------------
+    # 2) Filtro País (single select)
+    # -----------------------------
+    if "recipientcountry_codename" in df_ejec.columns:
+        # Obtenemos la lista de países disponibles tras filtrar región
+        pais_list = sorted(df_ejec["recipientcountry_codename"].dropna().unique().tolist())
+        sel_country = st.sidebar.selectbox("País:", ["Todos"] + pais_list, index=0)
+        if sel_country != "Todos":
+            df_ejec = df_ejec[df_ejec["recipientcountry_codename"] == sel_country]
+            if df_ejec.empty:
+                st.warning("No hay datos tras escoger ese país.")
+                return
+    else:
+        st.warning("No se encontró la columna 'recipientcountry_codename'.")
+        return
+
+    # -----------------------------
+    # Filtro sector (multiselect) para colorear
+    # -----------------------------
     if "Sector_1" in df_ejec.columns:
         sector_list = sorted(df_ejec["Sector_1"].dropna().unique().tolist())
         st.sidebar.markdown("**Selecciona uno o varios sectores:**")
@@ -211,20 +248,19 @@ def subpagina_ejecucion():
         # En lugar de filtrar, asignamos color
         if len(sector_list) > 0:
             if sel_sectors:
-                # Cada sector seleccionado conserva su nombre, el resto será 'Otros'
                 df_ejec["sector_color"] = df_ejec["Sector_1"].apply(
                     lambda x: x if x in sel_sectors else "Otros"
                 )
             else:
-                # Si no se selecciona ninguno, todo se considera 'Otros'
                 df_ejec["sector_color"] = "Otros"
         else:
             df_ejec["sector_color"] = "Otros"
     else:
-        # Si no existe la columna 'Sector_1'
         df_ejec["sector_color"] = "Otros"
 
-    # --- Filtro modalidad_general ---
+    # -----------------------------
+    # Filtro modalidad_general
+    # -----------------------------
     if "modalidad_general" in df_ejec.columns:
         mod_list = sorted(df_ejec["modalidad_general"].dropna().unique().tolist())
         opt_mod = ["Todas"] + mod_list
@@ -233,10 +269,12 @@ def subpagina_ejecucion():
             df_ejec = df_ejec[df_ejec["modalidad_general"] == sel_mod]
 
     if df_ejec.empty:
-        st.warning("No hay datos tras los filtros (Ejecucion).")
+        st.warning("No hay datos tras los filtros actuales (Ejecucion).")
         return
 
-    # Filtro interno: activitystatus_codename en ["Closed", "Finalisation"]
+    # -----------------------------
+    # Filtro interno: activitystatus_codename
+    # -----------------------------
     if "activitystatus_codename" in df_ejec.columns:
         df_ejec = df_ejec[df_ejec["activitystatus_codename"].isin(["Closed", "Finalisation"])]
         if df_ejec.empty:
@@ -246,24 +284,26 @@ def subpagina_ejecucion():
         st.warning("No se encontró la columna 'activitystatus_codename'.")
         return
 
-    # Scatter “Planificacion Vs Ejecucion”
+    # -----------------------------
+    # Unico grafico: Planificacion Vs Ejecucion
+    # -----------------------------
     st.subheader("Planificacion Vs Ejecucion")
     needed_cols = {"duracion_estimada", "duracion_real", "sector_color", "activitystatus_codename"}
-    # Verificamos columnas con subset
+    # Verificamos columnas
     if needed_cols.issubset(df_ejec.columns):
         df_scat = df_ejec[
             df_ejec["duracion_estimada"].notna() &
             df_ejec["duracion_real"].notna()
         ]
         if df_scat.empty:
-            st.warning("No hay datos válidos en 'Planificacion Vs Ejecucion' tras filtrar nulos.")
+            st.warning("No hay datos válidos en 'Planificacion Vs Ejecucion' (valores nulos).")
         else:
             fig = px.scatter(
                 df_scat,
                 x="duracion_estimada",
                 y="duracion_real",
                 color="sector_color",  # <--- color por sector_color
-                hover_data=["activitystatus_codename"],  # <--- Se agrega la variable en el tooltip
+                hover_data=["activitystatus_codename"],  # <--- Tooltip
                 labels={
                     "duracion_estimada": "Duracion Est. (años)",
                     "duracion_real": "Duracion Real (años)",
