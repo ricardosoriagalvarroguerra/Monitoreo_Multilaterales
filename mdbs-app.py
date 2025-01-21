@@ -58,7 +58,6 @@ st.markdown(
 # -----------------------------------------------------------------------------
 @st.cache_data
 def load_dataframes():
-    # Ajusta las rutas de tus parquet según corresponda
     df_activity = pd.read_parquet("activity_iadb.parquet")
     df_outgoing = pd.read_parquet("outgoing_commitment_iadb.parquet")
     df_disb = pd.read_parquet("disbursements_data.parquet")
@@ -84,14 +83,9 @@ def get_pyg_renderer_by_name(dataset_name: str):
 # FUNCIONES AUXILIARES
 # -----------------------------------------------------------------------------
 def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
-    """
-    Esta función ya no se usa en la subpágina 'Ejecución' 
-    pero se mantiene por si deseas reutilizarla en otro lugar.
-    """
     needed_cols_1 = {"modalidad_general", "duracion_estimada"}
     needed_cols_2 = {"modalidad_general", "completion_delay_years"}
 
-    # Box Plot (Duración)
     if needed_cols_1.issubset(df.columns):
         df1 = df[df["modalidad_general"].notna() & df["duracion_estimada"].notna()]
         if not df1.empty:
@@ -100,7 +94,7 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
                 x="modalidad_general",
                 y="duracion_estimada",
                 color_discrete_sequence=["#ef233c"],
-                title="",  # Sin título interno
+                title="", 
                 labels={
                     "modalidad_general": "Modalidad General",
                     "duracion_estimada": "Duración (años)"
@@ -113,7 +107,6 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
             )
             st.plotly_chart(fig1, use_container_width=True)
 
-    # Box Plot (Atraso)
     if needed_cols_2.issubset(df.columns):
         df2 = df[df["modalidad_general"].notna() & df["completion_delay_years"].notna()]
         if not df2.empty:
@@ -122,7 +115,7 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
                 x="modalidad_general",
                 y="completion_delay_years",
                 color_discrete_sequence=["#edf2f4"],
-                title="",  # Sin título interno
+                title="",
                 labels={
                     "modalidad_general": "Modalidad General",
                     "completion_delay_years": "Atraso (años)"
@@ -137,29 +130,20 @@ def boxplot_modalidad(df: pd.DataFrame, titulo_extra: str = ""):
 
 
 def compute_yoy(df: pd.DataFrame, date_col: str, value_col: str, freq_code: str, shift_periods: int):
-    """
-    Calcula la variación interanual (YoY) en base a `value_col`.
-    YOY_t = [(value_t / value_{t-Δ}) - 1] * 100
-    Retorna un DataFrame con columnas: [date_col, value_col, yoy, Periodo].
-    """
     df_resampled = df.copy()
     df_resampled.set_index(date_col, inplace=True)
 
-    # Sumar 'value_col' según la frecuencia deseada
     df_agg = df_resampled[value_col].resample(freq_code).sum().reset_index()
     df_agg = df_agg.sort_values(date_col)
-
-    # Cambio porcentual vs. 'shift_periods' atrás
     df_agg["yoy"] = df_agg[value_col].pct_change(periods=shift_periods) * 100
 
-    # Formateamos "Periodo"
-    if freq_code.upper() == "A":  # Anual
+    if freq_code.upper() == "A":  
         df_agg["Periodo"] = df_agg[date_col].dt.year.astype(str)
-    elif freq_code.upper() in ["Q", "3M"]:  # Trimestral
+    elif freq_code.upper() in ["Q", "3M"]:  
         df_agg["Periodo"] = (
             df_agg[date_col].dt.year.astype(str) + "T" + df_agg[date_col].dt.quarter.astype(str)
         )
-    elif freq_code.upper() in ["6M", "2Q"]:  # Semestral
+    elif freq_code.upper() in ["6M", "2Q"]:  
         sm = (df_agg[date_col].dt.month.sub(1)//6).add(1)
         df_agg["Periodo"] = df_agg[date_col].dt.year.astype(str) + "S" + sm.astype(str)
     else:
@@ -168,65 +152,46 @@ def compute_yoy(df: pd.DataFrame, date_col: str, value_col: str, freq_code: str,
     return df_agg
 
 # -----------------------------------------------------------------------------
-# SUBPAGINA EJECUCION (ACTIVITY_IADB)
+# SUBPAGINA EJECUCION
 # -----------------------------------------------------------------------------
 def subpagina_ejecucion():
-    """
-    - Se elimina el Scatter “Aprobaciones Vs Ejecución” y los boxplots.
-    - Único gráfico: “Planificación Vs Ejecución”.
-    - Filtro interno para activitystatus_codename en ["Closed", "Finalisation"].
-    - Filtro de Sector_1 con multiselect (cada sector seleccionado se colorea distinto; 'Otros' para el resto).
-    - Mostrar en tooltip la variable activitystatus_codename.
-    - Filtros: 
-      1) Region (con opción especial "5-FP"), 
-      2) País (single select), 
-      3) Sector (multiselect para colorear).
-    """
     st.markdown('<p class="subtitle">Subpagina: Ejecucion</p>', unsafe_allow_html=True)
 
     df_ejec = DATASETS["ACTIVITY_IADB"].copy()
 
     st.sidebar.subheader("Filtros (Ejecucion)")
 
-    # -----------------------------
     # 1) Filtro Region
-    # -----------------------------
     custom_5fp_countries = ["Argentina", "Bolivia (Plurinational State of)", "Brazil", "Paraguay", "Uruguay"]
 
     if "region" in df_ejec.columns:
-        # Obtenemos las regiones reales existentes
         real_regions = sorted(df_ejec["region"].dropna().unique().tolist())
-        # Insertamos "5-FP" como región adicional (solo si no existe ya en la lista)
+        # Insertamos "5-FP" solo si no existe
         if "5-FP" not in real_regions:
             real_regions.insert(0, "5-FP")
 
-        sel_region = st.sidebar.selectbox(
-            "Region:",
-            ["Todas"] + real_regions,
-            index=0
-        )
+        sel_region = st.sidebar.selectbox("Region:", ["Todas"] + real_regions, index=0)
 
         if sel_region == "5-FP":
-            # Para la región "5-FP", filtramos el DF a esos 5 países
             df_ejec = df_ejec[df_ejec["recipientcountry_codename"].isin(custom_5fp_countries)]
-            # Si después de filtrar no hay datos, avisamos
             if df_ejec.empty:
                 st.warning("No hay datos que correspondan a la región 5-FP.")
                 return
         elif sel_region == "Todas":
             pass  # No filtramos nada
         else:
-            # Filtramos la región "normal"
             df_ejec = df_ejec[df_ejec["region"] == sel_region]
             if df_ejec.empty:
                 st.warning("No hay datos tras filtrar por esta región.")
                 return
+    else:
+        # Si la columna region no existe, mostramos un selectbox básico
+        st.warning("No se encontró la columna 'region' en el dataset.")
+        sel_region = st.sidebar.selectbox("Region:", ["Todas"], index=0)
+        # No filtramos nada
 
-    # -----------------------------
     # 2) Filtro País (single select)
-    # -----------------------------
     if "recipientcountry_codename" in df_ejec.columns:
-        # Obtenemos la lista de países disponibles tras filtrar región
         pais_list = sorted(df_ejec["recipientcountry_codename"].dropna().unique().tolist())
         sel_country = st.sidebar.selectbox("País:", ["Todos"] + pais_list, index=0)
         if sel_country != "Todos":
@@ -238,14 +203,11 @@ def subpagina_ejecucion():
         st.warning("No se encontró la columna 'recipientcountry_codename'.")
         return
 
-    # -----------------------------
-    # Filtro sector (multiselect) para colorear
-    # -----------------------------
+    # Filtro sector (multiselect)
     if "Sector_1" in df_ejec.columns:
         sector_list = sorted(df_ejec["Sector_1"].dropna().unique().tolist())
         st.sidebar.markdown("**Selecciona uno o varios sectores:**")
         sel_sectors = st.sidebar.multiselect("Sector_1:", sector_list, default=[])
-        # En lugar de filtrar, asignamos color
         if len(sector_list) > 0:
             if sel_sectors:
                 df_ejec["sector_color"] = df_ejec["Sector_1"].apply(
@@ -258,9 +220,7 @@ def subpagina_ejecucion():
     else:
         df_ejec["sector_color"] = "Otros"
 
-    # -----------------------------
     # Filtro modalidad_general
-    # -----------------------------
     if "modalidad_general" in df_ejec.columns:
         mod_list = sorted(df_ejec["modalidad_general"].dropna().unique().tolist())
         opt_mod = ["Todas"] + mod_list
@@ -272,9 +232,7 @@ def subpagina_ejecucion():
         st.warning("No hay datos tras los filtros actuales (Ejecucion).")
         return
 
-    # -----------------------------
     # Filtro interno: activitystatus_codename
-    # -----------------------------
     if "activitystatus_codename" in df_ejec.columns:
         df_ejec = df_ejec[df_ejec["activitystatus_codename"].isin(["Closed", "Finalisation"])]
         if df_ejec.empty:
@@ -284,12 +242,9 @@ def subpagina_ejecucion():
         st.warning("No se encontró la columna 'activitystatus_codename'.")
         return
 
-    # -----------------------------
-    # Unico grafico: Planificacion Vs Ejecucion
-    # -----------------------------
+    # Gráfico: Planificacion Vs Ejecucion
     st.subheader("Planificacion Vs Ejecucion")
     needed_cols = {"duracion_estimada", "duracion_real", "sector_color", "activitystatus_codename"}
-    # Verificamos columnas
     if needed_cols.issubset(df_ejec.columns):
         df_scat = df_ejec[
             df_ejec["duracion_estimada"].notna() &
@@ -302,15 +257,14 @@ def subpagina_ejecucion():
                 df_scat,
                 x="duracion_estimada",
                 y="duracion_real",
-                color="sector_color",  # <--- color por sector_color
-                hover_data=["activitystatus_codename"],  # <--- Tooltip
+                color="sector_color",  
+                hover_data=["activitystatus_codename"],  
                 labels={
                     "duracion_estimada": "Duracion Est. (años)",
                     "duracion_real": "Duracion Real (años)",
                     "sector_color": "Sector"
                 }
             )
-            # Línea diagonal 45°
             max_val = max(df_scat["duracion_estimada"].max(), df_scat["duracion_real"].max())
             fig.add_shape(
                 type="line",
@@ -329,7 +283,7 @@ def subpagina_ejecucion():
 
 
 # -----------------------------------------------------------------------------
-# SUBPAGINA FLUJOS AGREGADOS (OUTGOING_COMMITMENT_IADB)
+# SUBPAGINA FLUJOS AGREGADOS
 # -----------------------------------------------------------------------------
 def subpagina_flujos_agregados():
     st.markdown('<p class="subtitle">Subpagina: Flujos Agregados</p>', unsafe_allow_html=True)
@@ -342,14 +296,12 @@ def subpagina_flujos_agregados():
     # -----------------------------
     st.sidebar.subheader("Filtros (Flujos Agregados)")
 
-    # 1) Region
     if "region" in df_original.columns:
         region_list = sorted(df_original["region"].dropna().unique().tolist())
         sel_region = st.sidebar.selectbox("Region:", ["Todas"] + region_list, 0)
     else:
         sel_region = "Todas"
 
-    # 2) País (solo si region != "Todas")
     df_filtered_for_region = df_original.copy()
     if sel_region != "Todas":
         df_filtered_for_region = df_filtered_for_region[df_filtered_for_region["region"] == sel_region]
@@ -372,7 +324,6 @@ def subpagina_flujos_agregados():
     else:
         sel_paises = ["Todas"]
 
-    # 3) Modalidad (general)
     df = df_filtered_for_region.copy()
     if "modalidad_general" in df.columns:
         m_list = sorted(df["modalidad_general"].dropna().unique().tolist())
@@ -385,7 +336,6 @@ def subpagina_flujos_agregados():
         st.warning("No hay datos tras los filtros de region/modalidad.")
         return
 
-    # 4) País
     if "Todas" not in sel_paises:
         if sel_paises:
             df = df[df["recipientcountry_codename"].isin(sel_paises)]
@@ -397,7 +347,6 @@ def subpagina_flujos_agregados():
         st.warning("No hay datos tras filtrar país(es).")
         return
 
-    # 5) Montos en millones
     if "value_usd" in df.columns:
         df["value_usd_millions"] = df["value_usd"] / 1_000_000
         min_m = float(df["value_usd_millions"].min())
@@ -417,7 +366,6 @@ def subpagina_flujos_agregados():
         st.warning("No hay datos tras filtrar por montos en millones.")
         return
 
-    # 6) Rango de años
     min_y = df["transactiondate_isodate"].dt.year.min()
     max_y = df["transactiondate_isodate"].dt.year.max()
 
@@ -439,9 +387,6 @@ def subpagina_flujos_agregados():
         st.warning("No hay datos tras filtrar por años.")
         return
 
-    # -----------------------------
-    # Frecuencia
-    # -----------------------------
     freq_opts = ["Trimestral", "Semestral", "Anual"]
     st.markdown("**Frecuencia**")
     freq_choice = st.selectbox("", freq_opts, index=2, label_visibility="collapsed")
@@ -459,9 +404,6 @@ def subpagina_flujos_agregados():
         label_x = "Año"
         shift_periods = 1
 
-    # -----------------------------
-    # Ver por: "Fechas" o "Sectores"
-    # -----------------------------
     vistas = ["Fechas", "Sectores"]
     vista = st.radio("Ver por:", vistas, horizontal=True)
 
@@ -469,7 +411,6 @@ def subpagina_flujos_agregados():
         st.warning("No hay datos tras los filtros en Flujos Agregados.")
         return
 
-    # Paleta de colores para uso posterior
     color_palette = [
         "#4361ee",
         "#E86D67",
@@ -481,11 +422,7 @@ def subpagina_flujos_agregados():
         "#8A84C6"
     ]
 
-    # -----------------------------
-    # GRAFICOS
-    # -----------------------------
     if vista == "Fechas":
-        # ============= VISTA FECHAS =============
         df.set_index("transactiondate_isodate", inplace=True)
         df_agg = df["value_usd"].resample(freq_code).sum().reset_index()
         df_agg["value_usd_millions"] = df_agg["value_usd"] / 1_000_000
@@ -518,7 +455,7 @@ def subpagina_flujos_agregados():
             x="Periodo",
             y="value_usd_millions",
             color_discrete_sequence=["#c9182c"],
-            title="",  # Sin título interno
+            title="",
             labels={
                 "Periodo": label_x,
                 "value_usd_millions": "Monto (Millones USD)"
@@ -535,8 +472,6 @@ def subpagina_flujos_agregados():
         st.plotly_chart(fig_time, use_container_width=True)
 
     else:
-        # ============= VISTA SECTORES =============
-        # 1) Creamos la columna "Periodo"
         if freq_choice == "Trimestral":
             df["Periodo"] = (
                 df["transactiondate_isodate"].dt.year.astype(str)
@@ -591,7 +526,7 @@ def subpagina_flujos_agregados():
             )
         )
         fig_subplots.update_layout(
-            height=800  # Ajusta altura si deseas
+            height=800
         )
 
         # BARRAS (abs)
@@ -652,9 +587,6 @@ def subpagina_flujos_agregados():
 
     st.info("Flujos agregados: Aprobaciones (Outgoing Commitments).")
 
-    # -----------------------------
-    # GRAFICO DE TASA DE CRECIMIENTO INTERANUAL
-    # -----------------------------
     st.markdown("---")
     st.markdown("## Tasa de Crecimiento Interanual (YoY)")
 
@@ -678,7 +610,6 @@ def subpagina_flujos_agregados():
                 list_countries_data_all.append((c, temp_df))
 
     yoy_list_all = []
-    # i) Global
     if not df_global_all.empty:
         yoy_g_all = compute_yoy(
             df_global_all,
@@ -690,7 +621,6 @@ def subpagina_flujos_agregados():
         yoy_g_all["Categoria"] = "Global"
         yoy_list_all.append(yoy_g_all)
 
-    # ii) Región
     if not df_region_all.empty:
         yoy_r_all = compute_yoy(
             df_region_all,
@@ -702,7 +632,6 @@ def subpagina_flujos_agregados():
         yoy_r_all["Categoria"] = f"Región: {sel_region}"
         yoy_list_all.append(yoy_r_all)
 
-    # iii) País(es)
     for (country_name, df_country_all) in list_countries_data_all:
         yoy_c_all = compute_yoy(
             df_country_all,
@@ -730,7 +659,6 @@ def subpagina_flujos_agregados():
                 "Categoria": ""
             }
         )
-        # Línea punteada en y=0
         fig_yoy_all.add_hline(
             y=0,
             line_dash="dot",
@@ -776,7 +704,7 @@ def series_temporales():
     st.markdown('<p class="subtitle">Ejemplo: line chart de un dataset (placeholder)</p>', unsafe_allow_html=True)
 
     df_temp = DATASETS["ACTIVITY_IADB"].copy()
-    if "apertura_date" in df_temp.columns:  # ejemplo de fecha
+    if "apertura_date" in df_temp.columns:
         df_temp["apertura_date"] = pd.to_datetime(df_temp["apertura_date"])
         min_date = df_temp["apertura_date"].min()
         max_date = df_temp["apertura_date"].max()
@@ -794,7 +722,7 @@ def series_temporales():
                 df_g,
                 x="apertura_date",
                 y="value_usd",
-                title="",  # Sin título interno
+                title="",
                 labels={
                     "apertura_date": "Fecha",
                     "value_usd": "Valor (USD)"
@@ -819,7 +747,6 @@ def analisis_geoespacial():
     st.markdown('<p class="subtitle">Ejemplo: folium map con MarkerCluster (placeholder)</p>', unsafe_allow_html=True)
 
     df_geo = DATASETS["ACTIVITY_IADB"].copy()
-    # Suponiendo hay columns lat, lon
     if "lat" in df_geo.columns and "lon" in df_geo.columns:
         m = folium.Map(location=[df_geo["lat"].mean(), df_geo["lon"].mean()], zoom_start=5)
         marker_cluster = MarkerCluster().add_to(m)
@@ -847,7 +774,7 @@ def multidimensional_y_relaciones():
         fig_corr = px.imshow(
             corr,
             text_auto=True,
-            title="",  # Sin título interno
+            title="",
         )
         fig_corr.update_layout(
             font_color="#FFFFFF",
